@@ -1,3 +1,23 @@
+WINDOWS
 https://www.php.net/downloads.php?os=windows
 
-Töltd le a kívánt php verziót ZIP formátumban és a tartalmát másold a PHP mappába! Ne legyen verziószámos (php-8.4) almappa benne!
+Töltsd le a kívánt PHP verziót ZIP formátumban (x64, Non Thread Safe), és a tartalmát másold a php mappába!
+Ne legyen verziószámos (php-8.4) almappa benne: a php.exe közvetlenül a rendszer/php mappában legyen.
+A mellékelt php.ini-t hagyd meg (ez kapcsolja be a Laravelhez szükséges kiterjesztéseket).
+
+LINUX
+A PocketWeb a rendszerre telepített PHP-t használja, ha ebben a mappában nincs saját:
+  Ubuntu, Debian, Mint:  sudo apt install php-cli php-sqlite3 php-mbstring php-xml php-curl php-zip unzip
+  Fedora:                sudo dnf install php-cli php-pdo php-mbstring php-xml php-process php-pecl-zip unzip
+  Arch, Manjaro:         sudo pacman -S php php-sqlite unzip   (és a php.ini-ben: extension=pdo_sqlite)
+  openSUSE:              sudo zypper install php8 php8-sqlite php8-mbstring php8-curl php8-zip php8-pcntl unzip
+
+Hordozható (telepítés nélküli) megoldás: statikus PHP, pl. https://static-php.dev
+("common" vagy "bulk" kiterjesztés-csomaggal). A letöltött "php" fájl ebbe a mappába kerüljön
+(rendszer/php/php), és legyen futtatható: chmod +x php
+
+MACOS
+brew install php
+vagy statikus PHP (https://static-php.dev) ide: rendszer/php/php
+
+A composer.phar mindegyik rendszeren ebben a mappában marad.

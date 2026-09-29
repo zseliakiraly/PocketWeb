@@ -18,8 +18,14 @@
         }
     </script>
 
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Helyi Tailwind (Play CDN 3.4), így internet nélkül is működik a felület -->
+    <script src="tailwindcss.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Terminál panel: xterm.js (ugyanez a VS Code terminálja) -->
+    <link rel="stylesheet" href="vendor/xterm/xterm.css">
+    <script src="vendor/xterm/xterm.js"></script>
+    <script src="vendor/xterm/addon-fit.js"></script>
+    <script src="vendor/xterm/addon-web-links.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -45,6 +51,12 @@
         .modal-enter-active { opacity: 1; transform: scale(1); transition: opacity 0.2s, transform 0.2s; }
         .modal-leave { opacity: 1; transform: scale(1); }
         .modal-leave-active { opacity: 0; transform: scale(0.95); transition: opacity 0.2s, transform 0.2s; }
+        /* Terminál panel */
+        #termTabs::-webkit-scrollbar { height: 0; }
+        .xterm .xterm-viewport { background-color: #141414 !important; }
+        .xterm .xterm-viewport::-webkit-scrollbar { width: 10px; }
+        .xterm .xterm-viewport::-webkit-scrollbar-thumb { background: #3d3d3d; border-radius: 0; }
+        body.resizing-terminal, body.resizing-terminal * { cursor: row-resize !important; user-select: none; }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-100 h-screen overflow-hidden flex select-none">
@@ -76,6 +88,13 @@
                 <span class="font-medium">Adatbázis</span>
             </a>
 
+            <!-- Terminál panel -->
+            <a href="#" onclick="termTogglePanel(); return false;" class="flex items-center gap-3 px-3 py-2 text-gray-400 hover:bg-gray-800 hover:text-white rounded-sm transition-colors group">
+                <svg class="w-5 h-5 group-hover:text-brand-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                <span class="font-medium">Terminál</span>
+                <span id="navTermBadge" class="hidden ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-green-500/20 text-green-400 text-[11px] font-semibold leading-5 text-center"></span>
+            </a>
+
             <!-- Beállítások -->
             <a href="#" onclick="openSettingsModal()" class="flex items-center gap-3 px-3 py-2 text-gray-400 hover:bg-gray-800 hover:text-white rounded-sm transition-colors group cursor-pointer">
                 <svg class="w-5 h-5 group-hover:text-brand-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
@@ -83,14 +102,22 @@
             </a>
         </nav>
 
+        <div class="px-4 pb-2">
+            <button onclick="quitApp()" class="w-full flex items-center gap-3 px-3 py-2 text-gray-400 hover:bg-red-500/10 hover:text-red-400 rounded-sm transition-colors" title="Minden szerver leállítása és a PocketWeb bezárása">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v9m6.36-5.36a9 9 0 11-12.72 0"></path></svg>
+                <span class="font-medium">Kilépés</span>
+            </button>
+        </div>
+
         <div class="p-4 border-t border-gray-800 text-xs text-gray-500 space-y-1">
-            <div>PocketWeb v2.3</div>
+            <div>PocketWeb v<span id="sbVersion">3.0</span> <span id="sbOs" class="text-gray-600"></span></div>
             <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-blue-500"></span> PHP <span id="sbPhpVer">...</span></div>
             <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-green-500"></span> Node <span id="sbNodeVer">...</span></div>
+            <div id="sbExtWarning" class="hidden text-yellow-500/90 pt-1 leading-snug"></div>
         </div>
     </aside>
 
-    <div class="flex-1 flex flex-col h-full overflow-hidden relative">
+    <div class="flex-1 flex flex-col h-full overflow-hidden relative min-w-0">
         <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-30 hidden md:hidden"></div>
 
         <!-- Fejléc -->
@@ -101,13 +128,16 @@
                 </button>
                 <h1 class="text-xl font-semibold text-gray-100" id="headerTitle">Helyi Weboldalak</h1>
             </div>
-			
+
             <div class="flex items-center gap-3 relative" id="dropdownContainer">
-				<button onclick="fetchSites(); showToast('Vezérlőpult frissítve', 'success');" class="p-2 rounded-sm hover:bg-gray-800 text-gray-400 hover:text-white transition-colors border border-transparent hover:border-gray-700" title="Vezérlőpult újratöltése (F5)">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-        </button>
+                <button onclick="termTogglePanel()" class="relative p-2 rounded-sm hover:bg-gray-800 text-gray-400 hover:text-white transition-colors border border-transparent hover:border-gray-700" title="Terminál panel (Ctrl+`)">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <span id="termBadge" class="hidden absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-green-500 text-[10px] font-bold text-black leading-4 text-center"></span>
+                </button>
+                <button onclick="fetchSites(); showToast('Vezérlőpult frissítve', 'success');" class="p-2 rounded-sm hover:bg-gray-800 text-gray-400 hover:text-white transition-colors border border-transparent hover:border-gray-700" title="Vezérlőpult újratöltése">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </button>
                 <div class="relative" id="headerActions">
-					
                     <button onclick="toggleDropdown(event)" class="bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-sm text-sm font-medium transition-colors flex items-center gap-2 shadow-lg shadow-brand-500/20 border border-brand-500/50 relative z-50">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                         Új Projekt
@@ -127,10 +157,13 @@
             </div>
         </header>
 
-        <main class="flex-1 overflow-hidden relative z-0 flex flex-col">
+        <!-- Figyelmeztető sáv (pl. ha a háttérfolyamat nem fut) -->
+        <div id="noticeBar" class="hidden shrink-0 px-6 py-2 text-sm bg-yellow-500/10 border-b border-yellow-500/30 text-yellow-300"></div>
+
+        <main id="mainArea" class="flex-1 overflow-hidden relative z-0 flex flex-col min-h-0">
 
             <!-- 1. Projektek Nézet (Kártyák) -->
-            <div id="projectsView" class="flex-1 overflow-y-auto p-6 flex flex-col h-full">
+            <div id="projectsView" class="flex-1 overflow-y-auto p-6 flex flex-col min-h-0">
                 <div id="sitesGrid" class="flex flex-wrap gap-6 justify-start">
                     <!-- A kártyákat a JavaScript generálja ide -->
                 </div>
@@ -145,15 +178,15 @@
             </div>
 
             <!-- 2. Adatbázis Nézet (Iframe + Külső gomb) -->
-            <div id="databaseView" class="hidden flex-1 p-6 h-full flex-col gap-4">
-                <div class="flex justify-between items-center bg-gray-800 p-4 rounded-md border border-gray-700 shadow-lg">
-                    <div>
+            <div id="databaseView" class="hidden flex-1 p-6 min-h-0 flex-col gap-4">
+                <div class="flex justify-between items-center bg-gray-800 p-4 rounded-md border border-gray-700 shadow-lg gap-4">
+                    <div class="min-w-0">
                         <p class="text-sm text-gray-400">Ha az alsó ablak fehér marad a biztonsági beállítások miatt, nyisd meg egy külön fülön!</p>
-			<p class="text-sm text-gray-400">System: SQLite</p>			
-			<p class="text-sm text-gray-400">Login: root / <span class="bg-gray-500 px-1.5 py-0.5 rounded font-mono text-white cursor-pointer hover:bg-gray-700 transition-colors" onclick="copyPassword(this)" title="Kattints a másoláshoz">mKmYPQ1etGC9FfDH</span></p>
-			<p class="text-sm text-gray-400">Database: a fájl teljes útvonala (pl. <span class="font-mono bg-gray-900 px-1 rounded">C:\...\projekted\database\database.sqlite</span>)</p>
+                        <p class="text-sm text-gray-400">System: SQLite</p>
+                        <p class="text-sm text-gray-400">Login: root / <span class="bg-gray-500 px-1.5 py-0.5 rounded font-mono text-white cursor-pointer hover:bg-gray-700 transition-colors" onclick="copyPassword(this)" title="Kattints a másoláshoz">mKmYPQ1etGC9FfDH</span></p>
+                        <p class="text-sm text-gray-400 truncate">Database: a fájl teljes útvonala (pl. <span id="dbPathExample" class="font-mono bg-gray-900 px-1 rounded select-text">C:\...\projekted\database\database.sqlite</span>)</p>
                     </div>
-                    <a href="adminer.php" target="_blank" class="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-sm text-sm font-medium transition-colors flex items-center gap-2 shadow-lg shadow-brand-500/20">
+                    <a href="adminer.php" target="_blank" class="shrink-0 px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-sm text-sm font-medium transition-colors flex items-center gap-2 shadow-lg shadow-brand-500/20">
                         Megnyitás új ablakban
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                     </a>
@@ -170,10 +203,42 @@
                 </div>
             </div>
 
+            <!-- 3. Terminál panel: a háttérben futó szerverek és telepítők kimenete (a régi felugró ablakok helyett) -->
+            <section id="termPanel" class="hidden relative shrink-0 flex-col border-t border-gray-800 bg-gray-950" style="height: 280px">
+                <div id="termResizer" class="absolute -top-1 left-0 right-0 h-2 cursor-row-resize z-10 group">
+                    <div class="h-0.5 mt-[3px] bg-transparent group-hover:bg-brand-500 transition-colors"></div>
+                </div>
+                <div class="h-9 shrink-0 flex items-center justify-between border-b border-gray-800 bg-gray-900 pl-2 pr-1">
+                    <div class="flex items-center min-w-0 flex-1">
+                        <span class="text-[11px] font-semibold tracking-wider text-gray-400 uppercase px-2 shrink-0">Terminál</span>
+                        <div id="termTabs" class="flex items-center overflow-x-auto min-w-0 h-9"></div>
+                    </div>
+                    <div class="flex items-center gap-0.5 shrink-0 pl-2">
+                        <button id="termStopBtn" onclick="termStopActive()" disabled class="p-1.5 rounded-sm text-gray-400 hover:text-red-400 hover:bg-gray-800 disabled:opacity-30 disabled:pointer-events-none" title="Folyamat leállítása">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"></rect></svg>
+                        </button>
+                        <button onclick="termClearActive()" class="p-1.5 rounded-sm text-gray-400 hover:text-white hover:bg-gray-800" title="Kimenet törlése">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+                        </button>
+                        <button onclick="termToggleMaximize()" class="p-1.5 rounded-sm text-gray-400 hover:text-white hover:bg-gray-800" title="Panel teljes méret / vissza">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                        </button>
+                        <button onclick="termTogglePanel(false)" class="p-1.5 rounded-sm text-gray-400 hover:text-white hover:bg-gray-800" title="Panel elrejtése (Ctrl+`)">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="termBody" class="relative flex-1 min-h-0">
+                    <div id="termEmpty" class="absolute inset-0 flex items-center justify-center text-sm text-gray-500 text-center px-6 leading-relaxed">
+                        Itt jelenik meg a projektek szervereinek és a telepítőknek a kimenete.<br>Indíts el egy szervert, vagy hozz létre egy Laravel / WordPress projektet!
+                    </div>
+                </div>
+            </section>
+
         </main>
     </div>
 
-    <!-- Modals (Új projekt, Törlés) -->
+    <!-- Modals (Új projekt, Törlés, Megerősítés) -->
     <div id="newSiteModal" class="fixed inset-0 z-[70] hidden flex items-center justify-center bg-black/60 backdrop-blur-sm">
         <div class="bg-gray-900 border border-gray-700 rounded-md shadow-2xl w-full max-w-md overflow-hidden transition-all transform scale-95 opacity-0" id="newSiteModalContent">
             <div class="p-6">
@@ -183,7 +248,6 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-400 mb-1">Projekt mappa neve (szóköz nélkül)</label>
                         <input type='text' id='newSiteName' onkeydown='if(event.key === &quot;Enter&quot;) createNewSite()' class='w-full bg-gray-950 border border-gray-700 rounded-sm px-4 py-2.5 text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all placeholder-gray-600' placeholder='pl. vizsgaremek'>
-
                     </div>
                 </div>
             </div>
@@ -210,12 +274,25 @@
         </div>
     </div>
 
+    <div id="confirmModal" class="fixed inset-0 z-[80] hidden flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div class="bg-gray-900 border border-gray-700 rounded-md shadow-2xl w-full max-w-md overflow-hidden transition-all transform scale-95 opacity-0" id="confirmModalContent">
+            <div class="p-6">
+                <h2 id="confirmTitle" class="text-xl font-semibold mb-3 text-white"></h2>
+                <p id="confirmText" class="text-gray-300 text-sm"></p>
+            </div>
+            <div class="bg-gray-850 px-6 py-4 border-t border-gray-800 flex justify-end gap-3">
+                <button id="confirmCancelBtn" class="px-4 py-2 rounded-sm text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors">Mégsem</button>
+                <button id="confirmOkBtn" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-sm text-sm font-medium transition-colors shadow-lg shadow-red-500/20">OK</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Beállítások Modal (Letöltésekkel) -->
     <div id="settingsModal" class="fixed inset-0 z-[70] hidden flex items-center justify-center bg-black/60 backdrop-blur-sm">
         <div class="bg-gray-900 border border-gray-700 rounded-md shadow-2xl w-full max-w-2xl overflow-hidden transition-all transform scale-95 opacity-0" id="settingsModalContent">
             <div class="p-6 max-h-[80vh] overflow-y-auto">
                 <h2 class="text-xl font-semibold mb-5 text-white flex items-center gap-2">
-                    <svg class="w-6 h-6 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
+                    <svg class="w-6 h-6 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     Környezet Beállításai
                 </h2>
 
@@ -231,73 +308,44 @@
                     </div>
 
                     <!-- szerkesztők -->
-					<div class="bg-gray-850 p-4 rounded-sm border border-gray-800">
+                    <div class="bg-gray-850 p-4 rounded-sm border border-gray-800">
                         <label class="block text-sm font-medium text-gray-300 mb-3">Külső szerkesztő</label>
-						<p class="text-xs text-gray-500 mb-4">A <span class="text-gray-300 font-mono">JetBrains</span> szerkesztőket hozzá kell adni a <span class="text-gray-300 font-mono">PATH</span> környezeti változóhoz telepítés során!</p>
+                        <p id="editorHint" class="text-xs text-gray-500 mb-4">A PocketWeb a szokásos telepítési helyeken és a <span class="text-gray-300 font-mono">PATH</span>-ban keresi a szerkesztőt.</p>
 
                         <div class="flex items-center gap-4">
                             <select id="editorSelect" onchange="saveEditorPreference()" class="ml-auto bg-gray-100 border border-gray-200 text-gray-700 text-sm rounded-sm focus:ring-blue-500 focus:border-blue-500 block px-2 py-2 shadow-sm">
-                            <option value="vscode">VS Code</option>
-                            <option value="sublime">Sublime Text</option>
-                            <option value="notepadpp">Notepad++</option>
-                            <option value="phpstorm">PhpStorm</option>
-                            <option value="webstorm">WebStorm</option>
-							</select>
+                                <option value="vscode">VS Code</option>
+                                <option value="sublime">Sublime Text</option>
+                                <option value="notepadpp">Notepad++</option>
+                                <option value="phpstorm">PhpStorm</option>
+                                <option value="webstorm">WebStorm</option>
+                            </select>
                         </div>
                     </div>
 
-                    <!-- Letöltések -->
+                    <!-- Letöltések (a JavaScript tölti ki az operációs rendszernek megfelelően) -->
                     <div class="bg-gray-850 p-4 rounded-sm border border-gray-800">
                         <label class="block text-sm font-medium text-gray-300 mb-3">Hivatalos szoftverek letöltése</label>
-                        <p class="text-xs text-gray-500 mb-4">Ezekkel a linkekkel töltheted le azokat az összetevőket, amiket a PocketWeb <span class="text-gray-300 font-mono">rendszer/</span> megfelelő mappáiba kell kicsomagolni.</p>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <a href="https://windows.php.net/download/" target="_blank" class="flex items-center gap-3 px-4 py-3 bg-gray-900 border border-gray-700 hover:border-brand-500 rounded-sm text-sm text-gray-300 hover:text-white transition-colors group">
-                                <div class="w-8 h-8 rounded bg-indigo-500/10 flex items-center justify-center group-hover:bg-indigo-500/20">
-                                    <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                                </div>
-                                <div>
-                                    <div class="font-medium">PHP (Non Thread Safe verzió!)</div>
-                                    <div class="text-xs text-gray-500">Zip (x64) => rendszer/php</div>
-                                </div>
-                            </a>
-
-                            <a href="https://nodejs.org/en/download/prebuilt-binaries" target="_blank" class="flex items-center gap-3 px-4 py-3 bg-gray-900 border border-gray-700 hover:border-green-500 rounded-sm text-sm text-gray-300 hover:text-white transition-colors group">
-                                <div class="w-8 h-8 rounded bg-green-500/10 flex items-center justify-center group-hover:bg-green-500/20">
-                                    <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                                </div>
-                                <div>
-                                    <div class="font-medium">Node.js (LTS)</div>
-                                    <div class="text-xs text-gray-500">Zip (x64) => rendszer/node</div>
-                                </div>
-                            </a>
-
-                            <a href="https://getcomposer.org/download/" target="_blank" class="flex items-center gap-3 px-4 py-3 bg-gray-900 border border-gray-700 hover:border-yellow-500 rounded-sm text-sm text-gray-300 hover:text-white transition-colors group">
-                                <div class="w-8 h-8 rounded bg-yellow-500/10 flex items-center justify-center group-hover:bg-yellow-500/20">
-                                    <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                                </div>
-                                <div>
-                                    <div class="font-medium">Composer</div>
-                                    <div class="text-xs text-gray-500">composer.phar => rendszer/php</div>
-                                </div>
-                            </a>
-
-                            <a href="https://www.adminer.org/" target="_blank" class="flex items-center gap-3 px-4 py-3 bg-gray-900 border border-gray-700 hover:border-gray-400 rounded-sm text-sm text-gray-300 hover:text-white transition-colors group">
-                                <div class="w-8 h-8 rounded bg-gray-500/10 flex items-center justify-center group-hover:bg-gray-500/20">
-                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                                </div>
-                                <div>
-                                    <div class="font-medium">Adminer</div>
-                                    <div class="text-xs text-gray-500">adminer.php (nevezd át) => rendszer/ mappa</div>
-                                </div>
-                            </a>
-                        </div>
+                        <p id="downloadsHint" class="text-xs text-gray-500 mb-4">Ezekkel a linkekkel töltheted le azokat az összetevőket, amiket a PocketWeb <span class="text-gray-300 font-mono">rendszer/</span> megfelelő mappáiba kell kicsomagolni.</p>
+                        <div id="downloadsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
                     </div>
                 </div>
             </div>
             <div class="bg-gray-850 px-6 py-4 border-t border-gray-800 flex justify-end gap-3">
                 <button onclick="closeSettingsModal()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-sm text-sm font-medium text-white transition-colors">Kész</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Teljes képernyős üzenet (leállítva / nincs kapcsolat) -->
+    <div id="overlay" class="fixed inset-0 z-[95] hidden flex items-center justify-center bg-gray-950/95 backdrop-blur-sm">
+        <div class="text-center max-w-md px-6">
+            <div class="w-14 h-14 mx-auto mb-5 rounded-full bg-gray-800 flex items-center justify-center">
+                <svg class="w-7 h-7 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v9m6.36-5.36a9 9 0 11-12.72 0"></path></svg>
+            </div>
+            <h2 id="overlayTitle" class="text-xl font-semibold text-white mb-2"></h2>
+            <p id="overlayText" class="text-gray-400 text-sm leading-relaxed"></p>
+            <button id="overlayRetryBtn" onclick="location.reload()" class="mt-6 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-sm text-sm text-gray-200 transition-colors">Újrapróbálás</button>
         </div>
     </div>
 
@@ -308,6 +356,26 @@
         let sites = [];
         let thumbVersions = {};
         let siteToDelete = '';
+        let App = { os: 'windows', token: '', projectsDir: '', separator: '\\' };   // a bootstrap tölti ki
+
+        // --- API hívás: minden kérés JSON POST, az X-PocketWeb fejléccel (idegen weboldal ezt nem tudja elküldeni) ---
+        async function api(action, params = {}) {
+            const response = await fetch('api.php?action=' + encodeURIComponent(action), {
+                method: 'POST',
+                headers: { 'X-PocketWeb': '1', 'Content-Type': 'application/json' },
+                body: JSON.stringify(params)
+            });
+            let data = null;
+            try { data = await response.json(); } catch (e) { throw new Error('Érvénytelen válasz a szervertől.'); }
+            if (!response.ok || (data && data.success === false)) {
+                throw new Error((data && (data.error || data.message)) || 'Hiba történt.');
+            }
+            return data;
+        }
+
+        function escapeHtml(text) {
+            return String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
 
         // --- Nézet váltó (SPA logika) ---
         function switchView(viewName) {
@@ -393,22 +461,34 @@
             }
         });
 
-        // --- Adatlekérés ---
-        async function fetchVersions() {
+        // --- Indulás: verziók, operációs rendszer ---
+        async function bootstrap() {
             try {
-                const response = await fetch('api.php?action=get_versions');
-                const data = await response.json();
-                document.getElementById('sbPhpVer').textContent = data.php;
-                document.getElementById('sbNodeVer').textContent = data.node;
+                App = await api('bootstrap');
             } catch (error) {
-                console.error("Nem sikerült lekérni a verziókat.");
+                showOverlay('Nincs kapcsolat', 'Nem sikerült elérni a PocketWebet. Indítsd újra az indítóval, majd kattints az Újrapróbálásra.');
+                return false;
             }
+            document.getElementById('sbVersion').textContent = App.version;
+            document.getElementById('sbOs').textContent = '· ' + App.osLabel;
+            document.getElementById('sbPhpVer').textContent = App.php + (App.bundledPhp ? '' : ' (rendszer)');
+            document.getElementById('sbNodeVer').textContent = App.node === '-' ? 'nincs' : App.node + (App.bundledNode ? '' : ' (rendszer)');
+            if (App.missingExtensions && App.missingExtensions.length) {
+                const warning = document.getElementById('sbExtWarning');
+                warning.textContent = 'A Laravelhez hiányzó PHP kiterjesztések: ' + App.missingExtensions.join(', ');
+                warning.classList.remove('hidden');
+            }
+            const sep = App.separator;
+            document.getElementById('dbPathExample').textContent = [App.projectsDir, 'projekted', 'database', 'database.sqlite'].join(sep);
+            if (App.os !== 'windows') document.querySelector('#editorSelect option[value="notepadpp"]').remove();
+            renderDownloads();
+            setNotice(App.supervisor ? '' : 'A PocketWeb háttérfolyamata nem fut, ezért a szerverek és a telepítők nem indíthatók. Indítsd újra a PocketWebet!');
+            return true;
         }
 
         async function fetchSites() {
             try {
-                const response = await fetch('api.php?action=get_sites');
-                sites = await response.json();
+                sites = await api('get_sites');
                 renderSites();
             } catch (error) {
                 console.error("Hiba az adatok lekérésekor:", error);
@@ -434,6 +514,23 @@
         document.getElementById('sidebarOverlay').addEventListener('click', toggleSidebar);
 
         // --- Kártyák renderelése ---
+        const ICONS = {
+            folder: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>',
+            terminal: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>',
+            code: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>',
+            globe: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>',
+            database: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4m0 5c0 2.21-3.58 4-8 4s-8-1.79-8-4"></path>',
+            stop: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"></path>',
+            play: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>',
+            trash: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>',
+            camera: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>'
+        };
+
+        function iconButton(action, icon, classes, title, enabled = true) {
+            const state = enabled ? `data-action="${action}"` : 'disabled';
+            return `<button ${state} class="p-2 rounded-md transition-colors ${enabled ? classes : 'text-gray-600 opacity-40 cursor-not-allowed'}" title="${escapeHtml(title)}"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">${ICONS[icon]}</svg></button>`;
+        }
+
         function renderSites() {
             const sitesGrid = document.getElementById('sitesGrid');
             const emptyState = document.getElementById('emptyState');
@@ -454,97 +551,70 @@
             sites.forEach(site => {
                 const card = document.createElement('div');
                 card.className = 'bg-gray-800 border border-gray-700 rounded-md hover:border-gray-600 transition-colors flex flex-col justify-between min-w-[280px] flex-1 max-w-[320px] overflow-hidden';
+                card.dataset.site = site.name;
 
-                let statusBadgeHTML = '';
-                let globeClass, globeTitle, globeClickAttr;
-                const needsServer = site.needsServer;
+                const running = site.serverState === 'running' || site.serverState === 'external';
+                const busy = site.installing;
 
-                if (needsServer) {
-                    const statusColor = site.isRunning ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-gray-500';
-                    const statusText = site.isRunning ? `Szerver Fut (:${site.port})` : 'Leállítva';
-
-                    statusBadgeHTML = `
-                        <div class="absolute top-2 left-2 px-2 py-1 bg-black/70 backdrop-blur-sm rounded-md text-[10px] font-medium text-white flex items-center gap-1.5 border border-white/10 shadow-lg z-20">
-                            <span class="w-1.5 h-1.5 rounded-full ${statusColor}"></span>
-                            ${statusText}
-                        </div>
-                    `;
-
-                    globeClass = site.isRunning
-                        ? 'text-blue-400 hover:text-blue-300 hover:bg-gray-700 cursor-pointer'
-                        : 'text-gray-600 cursor-not-allowed opacity-40';
-                    globeTitle = 'Megnyitás böngészőben (Szerver)';
-                    globeClickAttr = site.isRunning ? `onclick="openBrowser('${site.name}', 'server', '${site.port}')"` : '';
-                } else {
-                    globeClass = 'text-blue-400 hover:text-blue-300 hover:bg-gray-700 cursor-pointer';
-                    globeTitle = 'Megnyitás böngészőben (Helyi fájl)';
-                    globeClickAttr = `onclick="openBrowser('${site.name}', 'local', '')"`;
+                // Állapot jelvény (kattintva a Terminál panelen megnyílik a kimenet)
+                let badge = null;
+                if (site.installing) {
+                    badge = { dot: 'bg-brand-500 animate-pulse', text: 'Telepítés folyamatban...', job: site.installJob };
+                } else if (site.needsServer) {
+                    badge = {
+                        running:  { dot: 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]', text: `Szerver Fut (:${site.port})` },
+                        external: { dot: 'bg-green-500', text: `Fut (:${site.port}), máshonnan indítva` },
+                        starting: { dot: 'bg-yellow-400 animate-pulse', text: 'Szerver indul...' },
+                        stopping: { dot: 'bg-yellow-400 animate-pulse', text: 'Szerver leáll...' },
+                        stopped:  { dot: 'bg-gray-500', text: 'Leállítva' }
+                    }[site.serverState];
+                    if (badge) badge.job = site.serverJob;
                 }
-
-                const serveBtnClass = site.isRunning ? 'text-red-400 hover:bg-red-400/10' : 'text-green-400 hover:bg-green-400/10';
-
-                const serveIcon = site.isRunning
-                    ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"></path>'
-                    : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>';
+                const statusBadgeHTML = badge ? `
+                    <button ${badge.job ? 'data-action="output"' : ''} class="absolute top-2 left-2 px-2 py-1 bg-black/70 backdrop-blur-sm rounded-md text-[10px] font-medium text-white flex items-center gap-1.5 border border-white/10 shadow-lg z-20 ${badge.job ? 'hover:border-brand-500 cursor-pointer' : 'cursor-default'}" title="${badge.job ? 'Kimenet megnyitása a Terminál panelen' : ''}">
+                        <span class="w-1.5 h-1.5 rounded-full ${badge.dot}"></span>
+                        ${escapeHtml(badge.text)}
+                    </button>` : '';
 
                 const thumbVer = thumbVersions[site.name] || '1';
-
-                const hasDb = site.type === 'Laravel' || site.type === 'WordPress';
+                const hasDb = site.typeId === 'laravel' || site.typeId === 'wordpress';
+                const canBrowse = !site.needsServer || running;
+                const globeTitle = site.needsServer ? 'Megnyitás böngészőben (Szerver)' : 'Megnyitás böngészőben (Helyi fájl)';
 
                 card.innerHTML = `
                     <div class="h-32 w-full bg-gray-900 relative border-b border-gray-700/50 group/thumb">
-                        <img id="thumb-${site.name}" src="api.php?action=thumbnail&site=${site.name}&type=${site.type}&t=${thumbVer}" class="w-full h-full object-cover object-top opacity-75 group-hover/thumb:opacity-100 transition-opacity" alt="thumbnail">
+                        <img src="api.php?action=thumbnail&site=${encodeURIComponent(site.name)}&t=${thumbVer}" class="w-full h-full object-cover object-top opacity-75 group-hover/thumb:opacity-100 transition-opacity" alt="thumbnail">
 
-                        <button onclick="captureThumbnail('${site.name}')" class="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-brand-500 text-gray-200 hover:text-white rounded-md backdrop-blur-sm transition-all z-20 shadow-lg opacity-0 group-hover/thumb:opacity-100" title="Képernyőkép frissítése">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                        </button>
+                        ${busy ? '' : `<button data-action="thumbnail" class="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-brand-500 text-gray-200 hover:text-white rounded-md backdrop-blur-sm transition-all z-20 shadow-lg opacity-0 group-hover/thumb:opacity-100" title="Képernyőkép frissítése">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">${ICONS.camera}</svg>
+                        </button>`}
 
                         ${statusBadgeHTML}
 
                         <div class="absolute bottom-2 left-2 px-2 py-1 bg-black/70 backdrop-blur-sm rounded-md text-[10px] font-semibold text-gray-200 border border-white/10 shadow-lg z-20 uppercase tracking-wider">
-                            ${site.type}
+                            ${escapeHtml(site.type)}
                         </div>
                     </div>
 
                     <div class="p-4 flex-1 flex flex-col justify-between bg-gray-800">
                         <div class="flex items-center gap-3 mb-2">
-                            <h3 class="font-semibold text-gray-100 truncate text-lg tracking-tight" title="${site.name}">${site.name}</h3>
+                            <h3 class="font-semibold text-gray-100 truncate text-lg tracking-tight" title="${escapeHtml(site.name)}">${escapeHtml(site.name)}</h3>
                         </div>
 
                         <div class="mt-auto border-t border-gray-700/50 pt-3 flex items-center justify-between">
                             <div class="flex gap-1">
-                                <button onclick="openFolder('${site.name}')" class="p-2 rounded-md text-yellow-400 hover:text-yellow-300 hover:bg-gray-700 transition-colors" title="Mappa megnyitása">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-                                </button>
-                                <button onclick="openTerminal('${site.name}')" class="p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-colors" title="Parancssor itt">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                </button>
-                                <button onclick="openInEditor('${site.name}')" class="p-2 rounded-md text-teal-400 hover:text-teal-200 hover:bg-gray-700 transition-colors" title="Megnyitás a kiválasztott szerkesztőben">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
-                                    </svg>
-                                </button>
-                                <button ${globeClickAttr} class="p-2 rounded-md transition-all duration-200 ${globeClass}" title="${globeTitle}">
-                                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
-                                </button>
-                                ${hasDb ? `
-                                <button onclick="openDatabase('${site.name}', '${site.type}')" class="p-2 rounded-md text-indigo-400 hover:text-indigo-300 hover:bg-gray-700 transition-colors" title="Adatbázis megnyitása (Adminer)">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4m0 5c0 2.21-3.58 4-8 4s-8-1.79-8-4"></path>
-        </svg>
-                                </button>
-                                ` : ''}
+                                ${iconButton('folder', 'folder', 'text-yellow-400 hover:text-yellow-300 hover:bg-gray-700', 'Mappa megnyitása')}
+                                ${iconButton('terminal', 'terminal', 'text-gray-400 hover:text-white hover:bg-gray-700', 'Parancssor megnyitása a projekt mappájában (külön ablak)', !busy)}
+                                ${iconButton('editor', 'code', 'text-teal-400 hover:text-teal-200 hover:bg-gray-700', 'Megnyitás a kiválasztott szerkesztőben', !busy)}
+                                ${iconButton('browser', 'globe', 'text-blue-400 hover:text-blue-300 hover:bg-gray-700', globeTitle, canBrowse && !busy)}
+                                ${hasDb ? iconButton('database', 'database', 'text-indigo-400 hover:text-indigo-300 hover:bg-gray-700', 'Adatbázis megnyitása (Adminer)', !busy) : ''}
                             </div>
 
                             <div class="flex gap-1">
-                                ${needsServer ? `
-                                <button onclick="toggleServe('${site.name}')" class="p-2 rounded-md transition-colors ${serveBtnClass}" title="Szerver ${site.isRunning ? 'leállítása' : 'indítása'}">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">${serveIcon}</svg>
-                                </button>
-                                ` : ''}
-                                <button onclick="openDeleteModal('${site.name}')" class="p-2 rounded-md text-gray-500 hover:text-red-400 hover:bg-gray-700 transition-colors" title="Projekt törlése">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                </button>
+                                ${site.needsServer ? iconButton('serve', running || site.serverState === 'starting' ? 'stop' : 'play',
+                                    running || site.serverState === 'starting' ? 'text-red-400 hover:bg-red-400/10' : 'text-green-400 hover:bg-green-400/10',
+                                    `Szerver ${running || site.serverState === 'starting' ? 'leállítása' : 'indítása'}`, !busy && site.serverState !== 'stopping') : ''}
+                                ${iconButton('delete', 'trash', 'text-gray-500 hover:text-red-400 hover:bg-gray-700', 'Projekt törlése', !busy)}
                             </div>
                         </div>
                     </div>
@@ -553,28 +623,42 @@
             });
         }
 
-	function openDatabase(siteName, siteType) {
+        // A kártyák gombjai (egy közös eseménykezelő, így a mappanevek nem kerülnek a JavaScript kódba)
+        document.getElementById('sitesGrid').addEventListener('click', (event) => {
+            const button = event.target.closest('[data-action]');
+            const card = event.target.closest('[data-site]');
+            if (!button || !card) return;
+            const site = sites.find(s => s.name === card.dataset.site);
+            if (!site) return;
+            switch (button.dataset.action) {
+                case 'folder': openFolder(site.name); break;
+                case 'terminal': openTerminal(site.name); break;
+                case 'editor': openInEditor(site.name); break;
+                case 'browser': openBrowser(site); break;
+                case 'database': openDatabase(site.name); break;
+                case 'serve': toggleServe(site.name); break;
+                case 'delete': openDeleteModal(site.name); break;
+                case 'thumbnail': captureThumbnail(site.name); break;
+                case 'output': termFocus(site.installJob || site.serverJob); break;
+            }
+        });
+
+        function openDatabase(siteName) {
             switchView('database');
-            const adminerFrame = document.getElementById('adminerFrame');
             document.getElementById('adminerLoader').style.display = 'flex';
-            
+
             // Lekérjük az API-tól az adatbázis fájl abszolút útvonalát
-            fetch(`api.php?action=get_db_path&site=${encodeURIComponent(siteName)}&type=${encodeURIComponent(siteType)}`)
-                .then(res => res.json())
+            api('get_db_path', { site: siteName })
                 .then(data => {
-                    if (data.success && data.path) {
-    const adminerUrl = `../adminer.php?sqlite=&username=root&db=${encodeURIComponent(data.path)}`;
-    window.open(adminerUrl, '_blank');
-} else {
-    document.getElementById('adminerLoader').style.display = 'none';
-    showToast('Az adatbázis fájl még nem létezik (lehet, hogy előbb el kell indítani vagy telepíteni az oldalt).', 'error');
-}
+                    const adminerUrl = `adminer.php?sqlite=&username=root&db=${encodeURIComponent(data.path)}`;
+                    window.open(adminerUrl, '_blank');
                 })
-                .catch(() => {
+                .catch((e) => {
                     document.getElementById('adminerLoader').style.display = 'none';
-                    showToast('Hiba az adatbázis útvonal lekérésekor.', 'error');
+                    showToast(e.message || 'Hiba az adatbázis útvonal lekérésekor.', 'error');
                 });
         }
+
         // --- Modals & Actions ---
         function openDeleteModal(siteName) {
             siteToDelete = siteName;
@@ -592,53 +676,103 @@
             setTimeout(() => modal.classList.add('hidden'), 200);
         }
 
+        // Általános megerősítő ablak – Promise-t ad vissza (true = OK)
+        function confirmDialog(title, text, okLabel = 'OK') {
+            const modal = document.getElementById('confirmModal');
+            const content = document.getElementById('confirmModalContent');
+            document.getElementById('confirmTitle').textContent = title;
+            document.getElementById('confirmText').textContent = text;
+            const okBtn = document.getElementById('confirmOkBtn');
+            const cancelBtn = document.getElementById('confirmCancelBtn');
+            okBtn.textContent = okLabel;
+            modal.classList.remove('hidden');
+            setTimeout(() => content.classList.remove('scale-95', 'opacity-0'), 10);
+            return new Promise(resolve => {
+                const close = (result) => {
+                    content.classList.add('scale-95', 'opacity-0');
+                    setTimeout(() => modal.classList.add('hidden'), 200);
+                    okBtn.onclick = cancelBtn.onclick = null;
+                    resolve(result);
+                };
+                okBtn.onclick = () => close(true);
+                cancelBtn.onclick = () => close(false);
+            });
+        }
+
+        // Képernyőkép: a háttérben készül, a végéről a Terminál poller szól (rejtett feladat)
+        const pendingThumbnails = new Map();   // feladat id -> projekt név
         async function captureThumbnail(siteName) {
             showToast(`Képernyőkép készítése folyamatban...`, 'info');
             try {
-                const res = await fetch(`api.php?action=capture_thumbnail&site=${siteName}`);
-                const data = await res.json();
-                if (data.success) {
-                    showToast('Képernyőkép sikeresen frissítve!', 'success');
-                    thumbVersions[siteName] = Date.now();
-                    const img = document.getElementById(`thumb-${siteName}`);
-                    if (img) img.src = `api.php?action=thumbnail&site=${siteName}&t=${thumbVersions[siteName]}`;
-                } else {
-                    showToast(data.error, 'error');
-                }
-            } catch(e) {
-                showToast('Hálózati hiba a képkészítéskor.', 'error');
+                const res = await api('capture_thumbnail', { site: siteName });
+                pendingThumbnails.set(res.job, siteName);
+                pollSoon();
+            } catch (e) {
+                showToast(e.message, 'error');
             }
+        }
+
+        function handleHiddenJob(job) {
+            if (!pendingThumbnails.has(job.id) || ['queued', 'running', 'stopping'].includes(job.state)) return;
+            const siteName = pendingThumbnails.get(job.id);
+            pendingThumbnails.delete(job.id);
+            if (job.state === 'exited' && job.exitCode === 0) {
+                showToast((job.message || 'Képernyőkép sikeresen frissítve!').replace(/^\[[+x!*]\]\s*/, ''), 'success');
+                thumbVersions[siteName] = Date.now();
+                renderSites();
+            } else {
+                showToast((job.message || job.error || 'Nem sikerült a képernyőkép.').replace(/^\[[+x!*]\]\s*/, ''), 'error');
+            }
+            api('job_remove', { id: job.id }).catch(() => {});
         }
 
         async function confirmDeleteSite() {
             if(!siteToDelete) return;
-            showToast(`A(z) ${siteToDelete} törlése folyamatban...`, 'info');
+            const name = siteToDelete;
+            showToast(`A(z) ${name} törlése folyamatban...`, 'info');
             closeDeleteModal();
             try {
-                await fetch(`api.php?action=delete_site&site=${siteToDelete}`);
+                await api('delete_site', { site: name });
                 showToast('Projekt sikeresen törölve!', 'success');
-                setTimeout(fetchSites, 1500);
             } catch(e) {
-                showToast('Hiba a törlés során!', 'error');
+                showToast(e.message || 'Hiba a törlés során!', 'error');
+            }
+            fetchSites();
+        }
+
+        async function runAction(action, params, successMessage) {
+            try {
+                await api(action, params);
+                if (successMessage) showToast(successMessage, 'success');
+            } catch (e) {
+                showToast(e.message, 'error');
             }
         }
 
-        function openFolder(siteName) { fetch(`api.php?action=open_folder&site=${siteName}`); }
-        function openTerminal(siteName) { fetch(`api.php?action=open_terminal&site=${siteName}`); }
+        function openFolder(siteName) { runAction('open_folder', { site: siteName }); }
+        function openTerminal(siteName) { runAction('open_terminal', { site: siteName }); }
+        function openUrl(url) { runAction('open_url', { url }); }
 
-        function openBrowser(siteName, mode, port) {
-            if (mode === 'server' && !port) return;
-            fetch(`api.php?action=open_browser&site=${siteName}&mode=${mode}&port=${port}`);
+        function openBrowser(site) {
+            runAction('open_browser', { site: site.name, mode: site.needsServer ? 'server' : 'local' });
         }
 
         async function toggleServe(siteName) {
             try {
-                showToast(`Szerver parancs küldve...`, 'info');
-                await fetch(`api.php?action=toggle_serve&site=${siteName}`);
-                setTimeout(fetchSites, 1500);
+                const res = await api('toggle_serve', { site: siteName, cols: termColumns() });
+                if (res.state === 'starting') {
+                    showToast('Szerver indítása... A kimenetét a Terminál panelen látod.', 'info');
+                    termFocus(res.job);
+                } else if (res.state === 'stopping') {
+                    showToast('Szerver leállítása...', 'info');
+                } else {
+                    showToast('A szerver leállt.', 'success');
+                }
+                pollSoon();
             } catch(e) {
-                showToast('Hiba a szerver indításakor!', 'error');
+                showToast(e.message || 'Hiba a szerver indításakor!', 'error');
             }
+            fetchSites();
         }
 
         // --- Új Projekt Modal ---
@@ -685,14 +819,19 @@
             showToast(`Projekt inicializálása: ${cleanName}...`, 'info');
             closeNewSiteModal();
 
-            await fetch(`api.php?action=create_project&site=${cleanName}&type=${typeInput}`);
-
-            setTimeout(fetchSites, 2000);
-            if (typeInput.includes('wordpress') || typeInput === 'laravel') {
-                showToast('A telepítés elindult egy új ablakban!', 'success');
-            } else {
-                showToast('Projekt sikeresen létrehozva!', 'success');
+            try {
+                const res = await api('create_project', { site: cleanName, type: typeInput, cols: termColumns() });
+                if (res.job) {
+                    showToast('A telepítés elindult – a Terminál panelen követheted.', 'success');
+                    termFocus(res.job);
+                    pollSoon();
+                } else {
+                    showToast('Projekt sikeresen létrehozva!', 'success');
+                }
+            } catch (e) {
+                showToast(e.message, 'error');
             }
+            fetchSites();
         }
 
         // --- Beállítások Modal ---
@@ -710,6 +849,44 @@
         function closeSettingsModal() {
             settingsModalContent.classList.add('scale-95', 'opacity-0');
             setTimeout(() => settingsModal.classList.add('hidden'), 200);
+        }
+
+        // Letöltési linkek az aktuális operációs rendszerhez
+        function renderDownloads() {
+            const download = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>';
+            const colors = {
+                indigo: ['hover:border-brand-500', 'bg-indigo-500/10 group-hover:bg-indigo-500/20', 'text-indigo-400'],
+                green: ['hover:border-green-500', 'bg-green-500/10 group-hover:bg-green-500/20', 'text-green-500'],
+                yellow: ['hover:border-yellow-500', 'bg-yellow-500/10 group-hover:bg-yellow-500/20', 'text-yellow-500'],
+                gray: ['hover:border-gray-400', 'bg-gray-500/10 group-hover:bg-gray-500/20', 'text-gray-400']
+            };
+            const links = {
+                windows: [
+                    ['https://windows.php.net/download/', 'PHP (Non Thread Safe verzió!)', 'Zip (x64) => rendszer/php', 'indigo'],
+                    ['https://nodejs.org/en/download/prebuilt-binaries', 'Node.js (LTS)', 'Windows Zip (x64) => rendszer/node', 'green']
+                ],
+                linux: [
+                    ['https://static-php.dev/en/guide/manual-build.html', 'PHP: csomagkezelő vagy statikus PHP', 'sudo apt install php-cli php-sqlite3 ... | vagy php => rendszer/php', 'indigo'],
+                    ['https://nodejs.org/en/download/prebuilt-binaries', 'Node.js (LTS)', 'Linux Binary (tar.xz) => rendszer/node', 'green']
+                ],
+                macos: [
+                    ['https://formulae.brew.sh/formula/php', 'PHP: Homebrew vagy statikus PHP', 'brew install php | vagy php => rendszer/php', 'indigo'],
+                    ['https://nodejs.org/en/download/prebuilt-binaries', 'Node.js (LTS)', 'macOS Binary (tar.gz) => rendszer/node', 'green']
+                ]
+            }[App.os] || [];
+            links.push(['https://getcomposer.org/download/', 'Composer', 'composer.phar => rendszer/php', 'yellow']);
+            links.push(['https://www.adminer.org/', 'Adminer', 'adminer.php (nevezd át) => rendszer/ mappa', 'gray']);
+
+            document.getElementById('downloadsGrid').innerHTML = links.map(([url, title, hint, color]) => `
+                <a href="${url}" target="_blank" class="flex items-center gap-3 px-4 py-3 bg-gray-900 border border-gray-700 ${colors[color][0]} rounded-sm text-sm text-gray-300 hover:text-white transition-colors group">
+                    <div class="w-8 h-8 shrink-0 rounded ${colors[color][1]} flex items-center justify-center">
+                        <svg class="w-5 h-5 ${colors[color][2]}" fill="none" stroke="currentColor" viewBox="0 0 24 24">${download}</svg>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="font-medium">${escapeHtml(title)}</div>
+                        <div class="text-xs text-gray-500 truncate">${escapeHtml(hint)}</div>
+                    </div>
+                </a>`).join('');
         }
 
         function updateBrandColor(color) {
@@ -757,30 +934,45 @@
 
             if (type === 'success') {
                 bgColor = 'bg-gray-900 border-green-500/50 text-green-400';
-                icon = '<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+                icon = '<svg class="w-5 h-5 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
             } else if (type === 'error') {
                 bgColor = 'bg-gray-900 border-red-500/50 text-red-400';
-                icon = '<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                icon = '<svg class="w-5 h-5 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
             } else {
-                icon = '<svg class="w-5 h-5 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                icon = '<svg class="w-5 h-5 mr-2 shrink-0 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
             }
 
-            toast.className = `flex items-center p-4 border rounded-sm shadow-lg transform transition-all duration-300 translate-y-10 opacity-0 ${bgColor} pointer-events-auto`;
-            toast.innerHTML = `${icon} <span class="text-sm font-medium">${message}</span>`;
+            toast.className = `flex items-center p-4 border rounded-sm shadow-lg transform transition-all duration-300 translate-y-10 opacity-0 max-w-md ${bgColor} pointer-events-auto`;
+            toast.innerHTML = `${icon} <span class="text-sm font-medium"></span>`;
+            toast.querySelector('span').textContent = message;
 
             container.appendChild(toast);
             setTimeout(() => toast.classList.remove('translate-y-10', 'opacity-0'), 10);
             setTimeout(() => {
                 toast.classList.add('opacity-0', 'translate-x-10');
                 setTimeout(() => toast.remove(), 300);
-            }, 3000);
+            }, type === 'error' ? 6000 : 3000);
+        }
+
+        function setNotice(text) {
+            const bar = document.getElementById('noticeBar');
+            bar.textContent = text;
+            bar.classList.toggle('hidden', !text);
+        }
+
+        function showOverlay(title, text, retry = true) {
+            document.getElementById('overlayTitle').textContent = title;
+            document.getElementById('overlayText').textContent = text;
+            document.getElementById('overlayRetryBtn').classList.toggle('hidden', !retry);
+            document.getElementById('overlay').classList.remove('hidden');
         }
 
         // Betöltéskor beállítjuk a korábban mentett szerkesztőt (ha van)
         document.addEventListener('DOMContentLoaded', () => {
             const savedEditor = localStorage.getItem('preferredEditor');
-            if (savedEditor) {
-                document.getElementById('editorSelect').value = savedEditor;
+            const select = document.getElementById('editorSelect');
+            if (savedEditor && select.querySelector(`option[value="${savedEditor}"]`)) {
+                select.value = savedEditor;
             }
         });
 
@@ -793,37 +985,363 @@
 
         // A projekt megnyitása
         function openInEditor(siteName) {
-			const editor = document.getElementById('editorSelect').value;
-			const formData = new FormData();
-			// A site és az editor megy POST adatként, hogy biztonságos legyen
-			formData.append('site', siteName);
-			formData.append('editor', editor);
+            const editor = document.getElementById('editorSelect').value || 'vscode';
+            runAction('open_editor', { site: siteName, editor }, 'Szerkesztő megnyitva!');
+        }
 
-			// Az action viszont az URL-be kerül, ahogy a többi gombnál is!
-			fetch('api.php?action=open_editor', {
-				method: 'POST',
-				body: formData
-			})
-			.then(response => {
-				if (!response.ok) throw new Error('Hálózati hiba');
-				return response.json();
-			})
-			.then(data => {
-				if (data.success) {
-					showToast('Szerkesztő megnyitva!', 'success');
-				} else {
-					showToast(data.message || 'Hiba történt a megnyitáskor.', 'error');
-				}
-			})
-			.catch(error => {
-				console.error("Fetch hiba:", error);
-				showToast('Hiba a kérés során. (Lásd a konzolt)', 'error');
-			});
-		}
+        // --- Kilépés: minden szerver leállítása, a PocketWeb bezárása ---
+        async function quitApp() {
+            const ok = await confirmDialog('Kilépés', 'Leállítod a PocketWebet? Minden futó szerver és telepítés leáll.', 'Kilépés');
+            if (!ok) return;
+            quitting = true;
+            try { await api('quit'); } catch (e) {}
+            showOverlay('A PocketWeb leállt', 'Minden szerver leállt. Ezt az ablakot bezárhatod.', false);
+            setTimeout(() => window.close(), 600);
+        }
+
+        // =====================================================================
+        // Terminál panel – a háttérben futó szerverek és telepítők kimenete
+        // (a korábbi felugró parancssori ablakok helyett, VS Code stílusban)
+        // =====================================================================
+        const ACTIVE_STATES = ['queued', 'running', 'stopping'];
+        const Term = {
+            jobs: new Map(),        // feladat id -> { job, term, fit, el, offset, opened, ended }
+            removed: new Set(),     // bezárt fülek (amíg a szerver még listázza őket)
+            active: null,
+            open: false,
+            wantFocus: null,        // ezt a feladatot mutatjuk, amint megjelenik
+            maximized: false,
+            height: parseInt(localStorage.getItem('pw_term_height'), 10) || 280
+        };
+        const TERM_THEME = {
+            background: '#141414', foreground: '#cccccc', cursor: 'rgba(0,0,0,0)', cursorAccent: 'rgba(0,0,0,0)',
+            selectionBackground: '#264f78',
+            black: '#000000', red: '#cd3131', green: '#0dbc79', yellow: '#e5e510', blue: '#2472c8', magenta: '#bc3fbc', cyan: '#11a8cd', white: '#e5e5e5',
+            brightBlack: '#666666', brightRed: '#f14c4c', brightGreen: '#23d18b', brightYellow: '#f5f543', brightBlue: '#3b8eea', brightMagenta: '#d670d6', brightCyan: '#29b8db', brightWhite: '#e5e5e5'
+        };
+        let quitting = false;
+
+        function isActiveJob(job) { return ACTIVE_STATES.includes(job.state); }
+
+        function base64ToBytes(b64) {
+            const binary = atob(b64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes;
+        }
+
+        // A Laravel a terminál szélességéhez igazítja a sorokat – ezt adjuk át az induló folyamatnak
+        function termColumns() {
+            const active = Term.jobs.get(Term.active);
+            if (active && active.opened && active.term.cols > 20) return active.term.cols;
+            const width = document.getElementById('termBody').clientWidth || document.getElementById('mainArea').clientWidth;
+            return Math.max(60, Math.min(250, Math.floor((width - 24) / 7.8)));
+        }
+
+        function termEnsure(job) {
+            let t = Term.jobs.get(job.id);
+            if (t) return t;
+            const el = document.createElement('div');
+            el.className = 'absolute top-1 bottom-0 left-2 right-0 hidden';
+            document.getElementById('termBody').appendChild(el);
+            const term = new Terminal({
+                convertEol: true, disableStdin: true, cursorBlink: false, cursorInactiveStyle: 'none',
+                scrollback: 5000, fontSize: 13, lineHeight: 1.15, theme: TERM_THEME,
+                fontFamily: '"Cascadia Mono", Consolas, Menlo, Monaco, "DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono", monospace'
+            });
+            const fit = new FitAddon.FitAddon();
+            term.loadAddon(fit);
+            term.loadAddon(new WebLinksAddon.WebLinksAddon((event, uri) => { event.preventDefault(); openUrl(uri); }));
+            t = { job, term, fit, el, offset: -1, opened: false, ended: false };
+            Term.jobs.set(job.id, t);
+            if (job.command) term.write(`\x1b[90m$ ${job.command}\x1b[0m\r\n`);
+            return t;
+        }
+
+        function termDispose(id) {
+            const t = Term.jobs.get(id);
+            if (!t) return;
+            t.term.dispose();
+            t.el.remove();
+            Term.jobs.delete(id);
+            if (Term.active === id) {
+                const ids = [...Term.jobs.keys()];
+                Term.active = null;
+                if (ids.length) termShow(ids[ids.length - 1]);
+            }
+        }
+
+        // A folyamat vége: VS Code-szerű záró sor a kimenet alján
+        function termPrintEnd(t) {
+            if (t.ended) return;
+            t.ended = true;
+            const job = t.job;
+            let line;
+            if (job.state === 'failed') line = `\x1b[31m[PocketWeb] ${job.error || 'A folyamat nem indult el.'}\x1b[0m`;
+            else if (job.state === 'stopped') line = '\x1b[90m[PocketWeb] A folyamat leállítva.\x1b[0m';
+            else if (job.exitCode === 0) line = '\x1b[90m[PocketWeb] A folyamat befejeződött.\x1b[0m';
+            else line = `\x1b[31m[PocketWeb] A folyamat hibával állt le (kilépési kód: ${job.exitCode}).\x1b[0m`;
+            t.term.write('\r\n' + line + '\r\n');
+        }
+
+        function termTogglePanel(force) {
+            Term.open = typeof force === 'boolean' ? force : !Term.open;
+            const panel = document.getElementById('termPanel');
+            panel.classList.toggle('hidden', !Term.open);
+            panel.classList.toggle('flex', Term.open);
+            localStorage.setItem('pw_term_open', Term.open ? '1' : '0');
+            termApplyHeight();
+            if (Term.open) {
+                if (!Term.active && Term.jobs.size) Term.active = [...Term.jobs.keys()].pop();
+                if (Term.active) termShow(Term.active);
+            }
+        }
+
+        function termApplyHeight() {
+            const main = document.getElementById('mainArea');
+            const max = Math.max(160, main.clientHeight - 80);
+            const height = Term.maximized ? max : Math.max(120, Math.min(Term.height, max));
+            document.getElementById('termPanel').style.height = height + 'px';
+            termFitActive();
+        }
+
+        function termToggleMaximize() {
+            if (!Term.open) termTogglePanel(true);
+            Term.maximized = !Term.maximized;
+            termApplyHeight();
+        }
+
+        function termFitActive() {
+            const t = Term.jobs.get(Term.active);
+            if (!t || !t.opened || !Term.open) return;
+            requestAnimationFrame(() => { try { t.fit.fit(); } catch (e) {} });
+        }
+
+        function termShow(id) {
+            const t = Term.jobs.get(id);
+            if (!t) return;
+            Term.active = id;
+            for (const [jobId, item] of Term.jobs) item.el.classList.toggle('hidden', jobId !== id);
+            if (Term.open && !t.opened) {
+                t.term.open(t.el);
+                t.opened = true;
+            }
+            termFitActive();
+            renderTabs();
+        }
+
+        // Feladat kimenetének megmutatása (ha még nem ismerjük, amint megjelenik)
+        function termFocus(id) {
+            if (!id) return;
+            if (!Term.open) termTogglePanel(true);
+            if (Term.jobs.has(id)) termShow(id);
+            else Term.wantFocus = id;
+            pollSoon();
+        }
+
+        async function termClose(id) {
+            const t = Term.jobs.get(id);
+            if (!t) return;
+            if (isActiveJob(t.job)) {
+                const ok = await confirmDialog('Folyamat leállítása', `„${t.job.title}” még fut. Leállítod és bezárod a fület?`, 'Leállítás');
+                if (!ok) return;
+            }
+            Term.removed.add(id);
+            termDispose(id);
+            renderTabs();
+            api('job_remove', { id }).then(() => fetchSites()).catch(e => showToast(e.message, 'error'));
+        }
+
+        function termStopActive() {
+            const t = Term.jobs.get(Term.active);
+            if (!t || !isActiveJob(t.job)) return;
+            api('job_stop', { id: t.job.id }).then(pollSoon).catch(e => showToast(e.message, 'error'));
+        }
+
+        function termClearActive() {
+            const t = Term.jobs.get(Term.active);
+            if (t) t.term.clear();
+        }
+
+        let lastTabsSignature = '';
+        function renderTabs() {
+            // csak változáskor rajzoljuk újra (különben egy épp folyamatban lévő kattintás elveszhetne)
+            const signature = Term.active + '|' + [...Term.jobs.values()].map(t => [t.job.id, t.job.title, t.job.state, t.job.exitCode, t.job.listening].join(':')).join('|');
+            if (signature === lastTabsSignature) return;
+            lastTabsSignature = signature;
+            const tabs = document.getElementById('termTabs');
+            tabs.innerHTML = '';
+            for (const [id, t] of Term.jobs) {
+                const job = t.job;
+                let dot = 'bg-gray-500';
+                if (job.state === 'running') dot = (job.kind === 'server' && !job.listening) ? 'bg-yellow-400 animate-pulse' : 'bg-green-500';
+                else if (job.state === 'queued' || job.state === 'stopping') dot = 'bg-yellow-400 animate-pulse';
+                else if (job.state === 'failed' || (job.state === 'exited' && job.exitCode !== 0)) dot = 'bg-red-500';
+
+                const tab = document.createElement('div');
+                const active = id === Term.active;
+                tab.className = `group flex items-center gap-2 h-9 pl-3 pr-1 border-b-2 cursor-pointer text-xs whitespace-nowrap transition-colors ${active ? 'border-brand-500 text-white bg-gray-950' : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-850'}`;
+                tab.title = job.command || job.title;
+                tab.innerHTML = `<span class="w-2 h-2 rounded-full shrink-0 ${dot}"></span><span class="truncate max-w-[240px]"></span>
+                    <button class="p-0.5 rounded-sm text-gray-500 hover:text-white hover:bg-gray-700 ${active ? '' : 'opacity-0 group-hover:opacity-100'}" title="Fül bezárása"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>`;
+                tab.querySelector('.truncate').textContent = job.title;
+                tab.addEventListener('click', () => termShow(id));
+                tab.querySelector('button').addEventListener('click', (e) => { e.stopPropagation(); termClose(id); });
+                tabs.appendChild(tab);
+            }
+            document.getElementById('termEmpty').classList.toggle('hidden', Term.jobs.size > 0);
+            const activeJob = Term.jobs.get(Term.active);
+            document.getElementById('termStopBtn').disabled = !(activeJob && isActiveJob(activeJob.job));
+
+            const running = [...Term.jobs.values()].filter(t => isActiveJob(t.job)).length;
+            for (const badgeId of ['termBadge', 'navTermBadge']) {
+                const badge = document.getElementById(badgeId);
+                badge.textContent = running;
+                badge.classList.toggle('hidden', running === 0);
+            }
+        }
+
+        // Állapotváltozások: értesítések és a kártyák frissítése
+        function onJobChange(prev, job) {
+            const where = job.site ? `${job.site}: ` : '';
+            if (job.kind === 'install' && !isActiveJob(job) && isActiveJob(prev)) {
+                if (job.state === 'exited' && job.exitCode === 0) showToast(`${where}a telepítés elkészült!`, 'success');
+                else if (job.state !== 'stopped') showToast(`${where}a telepítés nem sikerült – részletek a Terminál panelen.`, 'error');
+                fetchSites();
+            }
+            if (job.kind === 'server') {
+                if (job.listening && !prev.listening) {
+                    // csak a most induló szerverről szólunk (újratöltés után a régóta futókról nem)
+                    if (Date.now() / 1000 - (job.startedAt || 0) < 30) showToast(`${where}a szerver fut: http://127.0.0.1:${job.port}`, 'success');
+                    fetchSites();
+                }
+                if (!isActiveJob(job) && isActiveJob(prev)) {
+                    if (job.state === 'exited' || job.state === 'failed') showToast(`${where}a szerver leállt (kilépési kód: ${job.exitCode ?? '?'}).`, 'error');
+                    fetchSites();
+                }
+            }
+        }
+
+        const Poll = { timer: null, busy: false, failures: 0, again: false };
+
+        function pollSoon() {
+            if (Poll.busy) { Poll.again = true; return; }
+            clearTimeout(Poll.timer);
+            Poll.timer = setTimeout(pollJobs, 50);
+        }
+
+        async function pollJobs() {
+            if (Poll.busy || quitting) return;
+            Poll.busy = true;
+            let active = pendingThumbnails.size > 0;
+            try {
+                const offsets = {};
+                for (const [id, t] of Term.jobs) offsets[id] = t.offset;
+                if (Term.wantFocus && !Term.jobs.has(Term.wantFocus)) offsets[Term.wantFocus] = -1;
+                const checkPorts = [...Term.jobs.values()].some(t => t.job.kind === 'server' && t.job.state === 'running' && !t.job.listening);
+                const data = await api('jobs', { offsets, checkPorts });
+                Poll.failures = 0;
+                document.getElementById('overlay').classList.add('hidden');
+                setNotice(data.supervisor ? '' : 'A PocketWeb háttérfolyamata nem fut, ezért a szerverek és a telepítők nem indíthatók. Indítsd újra a PocketWebet!');
+
+                const seen = new Set();
+                for (const job of data.jobs) {
+                    seen.add(job.id);
+                    if (job.hidden) { handleHiddenJob(job); if (isActiveJob(job)) active = true; continue; }
+                    if (Term.removed.has(job.id)) continue;
+                    const isNew = !Term.jobs.has(job.id);
+                    const t = termEnsure(job);
+                    const prev = t.job;
+                    if (!checkPorts || job.listening === undefined) job.listening = prev.listening;
+                    t.job = job;
+                    if (job.output) t.term.write(base64ToBytes(job.output));
+                    if (typeof job.offset === 'number') t.offset = job.offset;
+                    if (!isNew) onJobChange(prev, job);
+                    // a záró sor csak akkor, ha már a teljes kimenetet kiírtuk
+                    if (!isActiveJob(job) && typeof job.offset === 'number' && !job.output) termPrintEnd(t);
+                    if (isActiveJob(job) || job.output) active = true;
+                    if (isNew) Poll.again = true;   // az új feladat kimenetét azonnal lekérjük
+                    if (Term.wantFocus === job.id) { Term.wantFocus = null; termShow(job.id); }
+                }
+                for (const id of [...Term.jobs.keys()]) if (!seen.has(id)) termDispose(id);
+                for (const id of [...Term.removed]) if (!seen.has(id)) Term.removed.delete(id);
+                if (!Term.active && Term.jobs.size) termShow([...Term.jobs.keys()].pop());
+                renderTabs();
+            } catch (e) {
+                if (++Poll.failures >= 3 && !quitting) {
+                    showOverlay('A PocketWeb nem fut', 'Megszakadt a kapcsolat a PocketWeb háttérfolyamatával. Ha bezártad, indítsd újra az indítóval, majd kattints az Újrapróbálásra.');
+                }
+            } finally {
+                Poll.busy = false;
+                if (!quitting) {
+                    clearTimeout(Poll.timer);
+                    const delay = Poll.again ? 50 : (Poll.failures ? 3000 : (active || Term.wantFocus ? 500 : 2000));
+                    Poll.again = false;
+                    Poll.timer = setTimeout(pollJobs, delay);
+                }
+            }
+        }
+
+        // Panel átméretezése a felső szélénél húzva
+        (function () {
+            const resizer = document.getElementById('termResizer');
+            let startY = 0, startHeight = 0;
+            const onMove = (e) => {
+                Term.maximized = false;
+                Term.height = Math.max(120, startHeight + (startY - e.clientY));
+                termApplyHeight();
+            };
+            const onUp = () => {
+                document.body.classList.remove('resizing-terminal');
+                window.removeEventListener('mousemove', onMove);
+                window.removeEventListener('mouseup', onUp);
+                localStorage.setItem('pw_term_height', String(Term.height));
+            };
+            resizer.addEventListener('mousedown', (e) => {
+                startY = e.clientY;
+                startHeight = document.getElementById('termPanel').offsetHeight;
+                document.body.classList.add('resizing-terminal');
+                window.addEventListener('mousemove', onMove);
+                window.addEventListener('mouseup', onUp);
+                e.preventDefault();
+            });
+            new ResizeObserver(() => termFitActive()).observe(document.getElementById('termBody'));
+            window.addEventListener('resize', termApplyHeight);
+        })();
+
+        // Ctrl+` : Terminál panel ki/be (mint a VS Code-ban)
+        window.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.code === 'Backquote') {
+                e.preventDefault();
+                termTogglePanel();
+            }
+        });
+
+        // Figyelmeztetés, ha telepítés közben zárnák be az ablakot
+        window.addEventListener('beforeunload', (e) => {
+            if (quitting) return;
+            if ([...Term.jobs.values()].some(t => t.job.kind === 'install' && isActiveJob(t.job))) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+
+        // Bezáráskor jelezzük a PocketWebnek (a böngészős módban ebből tudja, hogy leállhat)
+        window.addEventListener('pagehide', (e) => {
+            if (!e.persisted && App.token) {
+                navigator.sendBeacon('api.php?action=bye', new Blob([App.token], { type: 'text/plain' }));
+            }
+        });
 
         // Init
-        fetchVersions();
-        fetchSites();
+        (async function init() {
+            if (localStorage.getItem('pw_term_open') === '1') termTogglePanel(true);
+            await bootstrap();
+            fetchSites();
+            pollJobs();
+            // a máshonnan (pl. parancssorból) indított szerverek miatt időnként frissítjük a kártyákat
+            setInterval(() => { if (!document.hidden && !quitting) fetchSites(); }, 20000);
+        })();
     </script>
 </body>
 </html>

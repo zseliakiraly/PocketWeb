@@ -1,0 +1,5 @@
+# Sorvégek: a Windows .bat fájlok CRLF-fel, a shell szkriptek LF-fel működnek megbízhatóan
+*.bat text eol=crlf
+*.sh text eol=lf
+*.command text eol=lf
+rendszer/bin/composer text eol=lf
