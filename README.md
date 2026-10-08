@@ -23,7 +23,7 @@ Indítás: kattints duplán a gyökérmappában található **indito.bat** fájl
 
 Egy pillanatra megjelenik egy ablak, ami ellenőrzi a környezetet, majd eltűnik: a PocketWeb a háttérben fut, a Vezérlőpult pedig egy izolált Edge (ha nincs, Chrome / Brave) ablakban nyílik meg.
 
-Ha végeztél, egyszerűen zárd be a Vezérlőpultot (vagy kattints a **Kilépés** gombra): a rendszer automatikusan leállít minden háttérfolyamatot.
+Ha végeztél, egyszerűen zárd be a Vezérlőpultot, vagy kattints a **Kilépés** gombra: a rendszer automatikusan leállít minden háttérfolyamatot, a Kilépés után a Vezérlőpult ablaka is bezárul.
 
 > Ha a gépen a PowerShell le van tiltva, a PocketWeb a korábbi módon, egy nyitva maradó fekete ablakban fut. Ezt ne zárd be, amíg dolgozol!
 

@@ -1193,6 +1193,11 @@
             }
         }
 
+        // A "#" linkek (menüpontok) ne kerüljenek a böngésző előzményei közé
+        document.addEventListener('click', (event) => {
+            if (event.target.closest('a[href="#"]')) event.preventDefault();
+        });
+
         // A data-external linkek a rendszer alapértelmezett böngészőjében nyílnak meg (nem a vezérlőpult ablakában)
         document.addEventListener('click', (event) => {
             const link = event.target.closest('a[data-external]');
@@ -1302,13 +1307,17 @@
         }
 
         // --- Kilépés: minden szerver leállítása, a PocketWeb bezárása ---
+        // A saját ablakát (app mód) a PocketWeb zárja be, miután mindent leállított: a lap maga ezt nem mindig
+        // teheti meg, mert a böngésző csak akkor engedi, ha az ablakban még nem navigáltak.
         async function quitApp() {
             const ok = await confirmDialog('Kilépés', 'Leállítod a PocketWebet? Minden futó szerver és telepítés leáll.', 'Kilépés');
             if (!ok) return;
             quitting = true;
+            showOverlay('A PocketWeb leáll...', 'Minden szerver és telepítés leáll, utána ez az ablak bezárul.', false);
             try { await api('quit'); } catch (e) {}
-            showOverlay('A PocketWeb leállt', 'Minden szerver leállt. Ezt az ablakot bezárhatod.', false);
-            setTimeout(() => window.close(), 600);
+            const ownWindow = App.mode === 'app';
+            setTimeout(() => window.close(), ownWindow ? 3000 : 600);   // tartalék, ha a PocketWebnek nem sikerülne
+            setTimeout(() => showOverlay('A PocketWeb leállt', 'Minden szerver leállt. Ezt az ablakot bezárhatod.', false), ownWindow ? 6000 : 1500);
         }
 
         // =====================================================================

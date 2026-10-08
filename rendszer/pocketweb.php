@@ -45,6 +45,7 @@ final class Supervisor
     private $token = '';
     private $url;
     private $focusWatches = [];      // előtérbe hozandó ablakok: [hint, az indítás előtti ablakok, kezdés]
+    private $closeWindow = false;    // Kilépés gomb (vagy Ctrl+C): a végén a vezérlőpult ablakát is bezárjuk
 
     public function __construct()
     {
@@ -246,7 +247,10 @@ final class Supervisor
     {
         // Ha a PocketWeb látható ablakban fut (PowerShell nélkül), a Ctrl+C is szabályosan leállít mindent
         if (function_exists('sapi_windows_set_ctrl_handler')) {
-            @sapi_windows_set_ctrl_handler(function () { $this->requestStop('Ctrl+C.'); });
+            @sapi_windows_set_ctrl_handler(function () {
+                $this->closeWindow = true;
+                $this->requestStop('Ctrl+C.');
+            });
         }
     }
 
@@ -304,6 +308,7 @@ final class Supervisor
                 if ($watch = $this->watchFocus($message['focus'] ?? null)) $this->focusWatches[] = $watch;
                 break;
             case 'quit':
+                $this->closeWindow = true;
                 $this->requestStop('Kilépés a vezérlőpultról.');
                 break;
         }
@@ -493,8 +498,29 @@ final class Supervisor
             $pids[] = (int)proc_get_status($this->dashboard)['pid'];
         }
         Platform::killTree($pids);
+        if ($this->closeWindow) $this->closeDashboard();
         $this->cleanup();
         $this->say('A PocketWeb leállt.');
+    }
+
+    /**
+     * A vezérlőpult saját ablakának bezárása, mintha az X-re kattintottak volna (a taskkill /F nélkül WM_CLOSE-t
+     * küld az ablakoknak). A böngésző a saját, elkülönített profiljával fut, így csak a PocketWeb ablakai zárulnak
+     * be. (A lap maga nem tudja bezárni: a böngésző csak akkor engedi, ha az ablakban még nem navigáltak.)
+     * A felhasználó saját böngészőjében megnyitott lapot nem zárjuk be.
+     */
+    private function closeDashboard(): void
+    {
+        if ($this->mode !== 'app') return;
+        $pids = [];
+        if ($this->browserProc && ($status = proc_get_status($this->browserProc))['running']) $pids[] = (int)$status['pid'];
+        // ha a böngésző egy már futó példányának adta át az ablakot, a címéről ismerjük fel (FFI-vel)
+        foreach (WinFocus::windows() as $window) {
+            if ($window['title'] === self::DASHBOARD_TITLE) $pids[] = $window['pid'];
+        }
+        if (!$pids) return;
+        $this->say('A vezérlőpult ablakának bezárása...');
+        Platform::closeWindows(array_values(array_unique($pids)));
     }
 
     private function cleanup(): void

@@ -176,6 +176,14 @@ class Platform
         }
     }
 
+    /** A folyamat ablakainak bezárása, mintha az X-re kattintottak volna (taskkill /F nélkül: WM_CLOSE). */
+    public static function closeWindows(array $pids): void
+    {
+        foreach (array_unique(array_map('intval', $pids)) as $pid) {
+            if ($pid > 0) exec('taskkill /PID ' . $pid . ' >NUL 2>&1');
+        }
+    }
+
     /**
      * A gépen figyelő (LISTEN) TCP portok.
      * @return array<int,int>|null port => PID; null, ha a netstat nem futott le
