@@ -1,3 +1,0 @@
-#!/bin/sh
-# "composer" parancs a PocketWeb mellé csomagolt composer.phar-hoz (Linux/macOS)
-exec php "$(cd "$(dirname "$0")/.." && pwd)/php/composer.phar" "$@"

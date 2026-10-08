@@ -1,18 +1,5 @@
 https://nodejs.org/en/download
-
-WINDOWS
 ( https://nodejs.org/dist/v24.21.0/node-v24.21.0-win-x64.zip )
+
 Töltsd le az oldalról a node aktuális verzióját Windowsra a STANDALONE BINARY (ZIP) gombbal, és a tartalmát másold a node mappába!
-(A node.exe közvetlenül a rendszer/node mappában legyen.)
-
-LINUX
-Töltsd le a "Linux Binaries (x64)" csomagot (node-vXX-linux-x64.tar.xz), és a tartalmát másold a node mappába,
-úgy, hogy a rendszer/node/bin/node fájl létezzen. Kibontás például:
-  tar -xJf node-v24.21.0-linux-x64.tar.xz --strip-components=1 -C rendszer/node
-(Vagy telepítsd a csomagkezelővel: ekkor a PocketWeb a rendszer Node.js-ét használja.)
-
-MACOS
-Töltsd le a "macOS Binary" csomagot (arm64 = Apple Silicon, x64 = Intel), és bontsd ki ide úgy,
-hogy a rendszer/node/bin/node fájl létezzen:
-  tar -xzf node-v24.21.0-darwin-arm64.tar.gz --strip-components=1 -C rendszer/node
-(Vagy: brew install node)
+Ne legyen verziószámos almappa benne: a node.exe közvetlenül a rendszer\node mappában legyen.

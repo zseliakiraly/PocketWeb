@@ -1,4 +1,6 @@
-# PocketWeb futásidejű fájlok (naplók, feladatok, böngészőprofilok)
+# PocketWeb futásidejű fájlok (naplók, feladatok, böngészőprofil)
 rendszer/.run/
 rendszer/.edge_profile/
 rendszer/.browser_profile/
+# a visszajelzéshez készült napló ZIP-ek
+visszajelzes/

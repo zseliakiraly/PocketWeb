@@ -8,7 +8,7 @@
  *    a kimenetük a vezérlőpult Terminál paneljén látszik
  *  - ha a vezérlőpult ablakát bezárják, mindent leállít
  *
- * Indítás: indito.bat (Windows), indito.sh (Linux), indito.command (macOS)
+ * Indítás: indito.bat (a mellékelt rendszer\php\php.exe-vel)
  * Kapcsolók:
  *   --preflight   csak ellenőriz; ha már fut egy példány, megnyitja a vezérlőpultot (kilépési kód: 0 = indítható, 2 = már fut, 1 = hiba)
  *   --no-browser  nem nyit böngészőt (a vezérlőpult kézzel nyitható meg)
@@ -85,7 +85,7 @@ final class Supervisor
         }
         if ($preflight) return 0;
 
-        $this->say('PocketWeb ' . PW_VERSION . ' – ' . Platform::osLabel() . ', PHP ' . PHP_VERSION);
+        $this->say('PocketWeb ' . PW_VERSION . ' – PHP ' . PHP_VERSION);
 
         // 2. Tiszta lap, az előző futás árván maradt folyamatainak leállítása
         $this->prepareRuntime();
@@ -104,9 +104,7 @@ final class Supervisor
             $this->openDashboard(true);
         }
         $this->writeInfo();
-        $this->say(Platform::isWindows()
-            ? 'Leállítás: zárd be a vezérlőpult ablakát (vagy Kilépés gomb).'
-            : 'Leállítás: zárd be a vezérlőpult ablakát, használd a Kilépés gombot, vagy nyomj Ctrl+C-t.');
+        $this->say('Leállítás: zárd be a vezérlőpult ablakát (vagy Kilépés gomb).');
 
         // 5. Főciklus
         $this->installSignalHandlers();
@@ -178,9 +176,6 @@ final class Supervisor
     private function startDashboard(): bool
     {
         $env = Platform::childEnv(['POCKETWEB_SUPERVISOR' => (string)getmypid()]);
-        if (!Platform::isWindows()) {
-            $env['PHP_CLI_SERVER_WORKERS'] = '4';   // több kérés egyszerre (Windowson nem támogatott)
-        }
         $cmd = [PHP_BINARY, '-q', '-S', PW_HOST . ':' . PW_PORT, '-t', PW_SYS, pw_path(PW_SYS, 'router.php')];
         $this->dashboard = Platform::spawn($cmd, PW_SYS, $env, Runtime::file('dashboard.log'));
         if (!$this->dashboard) {
@@ -205,8 +200,6 @@ final class Supervisor
     {
         $browser = Platform::findBrowser();
         if ($browser) {
-            $profile = Platform::browserProfile($browser);
-            Platform::clearStaleBrowserLock($profile);
             $cmd = Platform::appWindowCommand($browser, $this->url);
             if (!$track) {
                 // már futó példány: csak egy új ablak kell, nem figyeljük
@@ -214,7 +207,7 @@ final class Supervisor
             }
             $descriptors = [0 => ['null'], 1 => ['file', Runtime::file('browser.log'), 'w'], 2 => ['redirect', 1]];
             $pipes = [];
-            $proc = @proc_open($cmd, $descriptors, $pipes, PW_SYS, null, Platform::isWindows() ? ['bypass_shell' => true] : []);
+            $proc = @proc_open($cmd, $descriptors, $pipes, PW_SYS, null, ['bypass_shell' => true]);
             if (is_resource($proc)) {
                 if ($track) {
                     $this->browserProc = $proc;
@@ -246,12 +239,7 @@ final class Supervisor
 
     private function installSignalHandlers(): void
     {
-        if (function_exists('pcntl_async_signals')) {
-            pcntl_async_signals(true);
-            foreach ([SIGINT, SIGTERM, SIGHUP] as $signal) {
-                pcntl_signal($signal, function () { $this->requestStop('Leállítási kérés érkezett.'); });
-            }
-        }
+        // Ha a PocketWeb látható ablakban fut (PowerShell nélkül), a Ctrl+C is szabályosan leállít mindent
         if (function_exists('sapi_windows_set_ctrl_handler')) {
             @sapi_windows_set_ctrl_handler(function () { $this->requestStop('Ctrl+C.'); });
         }
@@ -320,9 +308,7 @@ final class Supervisor
             Jobs::setState($id, ['state' => 'failed', 'error' => 'Hibás feladat (nincs parancs vagy nem létező mappa).', 'endedAt' => microtime(true)]);
             return;
         }
-        $env = self::JOB_ENV;
-        if (!Platform::isWindows()) $env['TERM'] = 'xterm-256color';
-        $env = Platform::childEnv(array_merge($env, (array)($spec['env'] ?? [])));
+        $env = Platform::childEnv(array_merge(self::JOB_ENV, (array)($spec['env'] ?? [])));
         $proc = Platform::spawn(array_values(array_map('strval', $cmd)), $cwd, $env, Jobs::logFile($id));
         if (!$proc) {
             Jobs::setState($id, ['state' => 'failed', 'error' => 'Nem sikerült elindítani: ' . $cmd[0], 'endedAt' => microtime(true)]);

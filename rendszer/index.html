@@ -100,6 +100,12 @@
                 <svg class="w-5 h-5 group-hover:text-brand-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                 <span class="font-medium">Beállítások</span>
             </a>
+
+            <!-- Névjegy -->
+            <a href="#" onclick="openAboutModal(); return false;" class="flex items-center gap-3 px-3 py-2 text-gray-400 hover:bg-gray-800 hover:text-white rounded-sm transition-colors group cursor-pointer">
+                <svg class="w-5 h-5 group-hover:text-brand-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span class="font-medium">Névjegy</span>
+            </a>
         </nav>
 
         <div class="px-4 pb-2">
@@ -110,7 +116,7 @@
         </div>
 
         <div class="p-4 border-t border-gray-800 text-xs text-gray-500 space-y-1">
-            <div>PocketWeb v<span id="sbVersion">3.0</span> <span id="sbOs" class="text-gray-600"></span></div>
+            <div>PocketWeb v<span id="sbVersion">3.0</span></div>
             <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-blue-500"></span> PHP <span id="sbPhpVer">...</span></div>
             <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-green-500"></span> Node <span id="sbNodeVer">...</span></div>
             <div id="sbExtWarning" class="hidden text-yellow-500/90 pt-1 leading-snug"></div>
@@ -323,16 +329,128 @@
                         </div>
                     </div>
 
-                    <!-- Letöltések (a JavaScript tölti ki az operációs rendszernek megfelelően) -->
+                    <!-- Letöltések -->
                     <div class="bg-gray-850 p-4 rounded-sm border border-gray-800">
                         <label class="block text-sm font-medium text-gray-300 mb-3">Hivatalos szoftverek letöltése</label>
-                        <p id="downloadsHint" class="text-xs text-gray-500 mb-4">Ezekkel a linkekkel töltheted le azokat az összetevőket, amiket a PocketWeb <span class="text-gray-300 font-mono">rendszer/</span> megfelelő mappáiba kell kicsomagolni.</p>
-                        <div id="downloadsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+                        <p class="text-xs text-gray-500 mb-4">Ezekkel a linkekkel töltheted le azokat az összetevőket, amiket a PocketWeb <span class="text-gray-300 font-mono">rendszer/</span> megfelelő mappáiba kell kicsomagolni.</p>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <a href="https://windows.php.net/download/" data-external class="flex items-center gap-3 px-4 py-3 bg-gray-900 border border-gray-700 hover:border-brand-500 rounded-sm text-sm text-gray-300 hover:text-white transition-colors group">
+                                <div class="w-8 h-8 rounded bg-indigo-500/10 group-hover:bg-indigo-500/20 flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                </div>
+                                <div>
+                                    <div class="font-medium">PHP (Non Thread Safe verzió!)</div>
+                                    <div class="text-xs text-gray-500">Zip (x64) =&gt; rendszer/php</div>
+                                </div>
+                            </a>
+
+                            <a href="https://nodejs.org/en/download/prebuilt-binaries" data-external class="flex items-center gap-3 px-4 py-3 bg-gray-900 border border-gray-700 hover:border-green-500 rounded-sm text-sm text-gray-300 hover:text-white transition-colors group">
+                                <div class="w-8 h-8 rounded bg-green-500/10 group-hover:bg-green-500/20 flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                </div>
+                                <div>
+                                    <div class="font-medium">Node.js (LTS)</div>
+                                    <div class="text-xs text-gray-500">Zip (x64) =&gt; rendszer/node</div>
+                                </div>
+                            </a>
+
+                            <a href="https://getcomposer.org/download/" data-external class="flex items-center gap-3 px-4 py-3 bg-gray-900 border border-gray-700 hover:border-yellow-500 rounded-sm text-sm text-gray-300 hover:text-white transition-colors group">
+                                <div class="w-8 h-8 rounded bg-yellow-500/10 group-hover:bg-yellow-500/20 flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                </div>
+                                <div>
+                                    <div class="font-medium">Composer</div>
+                                    <div class="text-xs text-gray-500">composer.phar =&gt; rendszer/php</div>
+                                </div>
+                            </a>
+
+                            <a href="https://www.adminer.org/" data-external class="flex items-center gap-3 px-4 py-3 bg-gray-900 border border-gray-700 hover:border-gray-400 rounded-sm text-sm text-gray-300 hover:text-white transition-colors group">
+                                <div class="w-8 h-8 rounded bg-gray-500/10 group-hover:bg-gray-500/20 flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                </div>
+                                <div>
+                                    <div class="font-medium">Adminer</div>
+                                    <div class="text-xs text-gray-500">adminer.php (nevezd át) =&gt; rendszer/ mappa</div>
+                                </div>
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="bg-gray-850 px-6 py-4 border-t border-gray-800 flex justify-end gap-3">
                 <button onclick="closeSettingsModal()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-sm text-sm font-medium text-white transition-colors">Kész</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Névjegy Modal (verziók, visszajelzés küldése) -->
+    <div id="aboutModal" class="fixed inset-0 z-[70] hidden flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div class="bg-gray-900 border border-gray-700 rounded-md shadow-2xl w-full max-w-2xl overflow-hidden transition-all transform scale-95 opacity-0" id="aboutModalContent">
+            <div class="p-6 max-h-[80vh] overflow-y-auto">
+                <h2 class="text-xl font-semibold mb-5 text-white flex items-center gap-2">
+                    <svg class="w-6 h-6 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Névjegy
+                </h2>
+
+                <div class="space-y-6">
+                    <!-- PocketWeb -->
+                    <div class="bg-gray-850 p-4 rounded-sm border border-gray-800 flex items-start gap-4">
+                        <div class="w-12 h-12 shrink-0 rounded-sm bg-gradient-to-br from-brand-500 to-orange-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
+                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-lg font-bold text-white tracking-tight">PocketWeb</span>
+                                <span class="text-sm text-gray-400">v<span id="aboutVersion">3.0</span> · Windows</span>
+                            </div>
+                            <p class="text-sm text-gray-400 mt-1">Hordozható webfejlesztő környezet tanulóknak, a Laravel Herd mintájára. Telepítés és rendszergazdai jogok nélkül fut.</p>
+                            <p class="text-xs text-gray-500 mt-2">Licenc: GNU GPL v3 · <a href="https://github.com/zseliakiraly/PocketWeb" data-external class="text-brand-500 hover:underline">Forráskód a GitHubon</a></p>
+                        </div>
+                    </div>
+
+                    <!-- Összetevők -->
+                    <div class="bg-gray-850 p-4 rounded-sm border border-gray-800">
+                        <label class="block text-sm font-medium text-gray-300 mb-3">Összetevők</label>
+                        <div id="aboutComponents" class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm text-gray-500">Betöltés...</div>
+                        <p id="aboutSystem" class="text-xs text-gray-500 mt-3"></p>
+                    </div>
+
+                    <!-- Visszajelzés -->
+                    <div class="bg-gray-850 p-4 rounded-sm border border-gray-800">
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Visszajelzés küldése</label>
+                        <p class="text-xs text-gray-500 mb-4">Hibát találtál, vagy van egy ötleted? Írd meg! A levelet a saját levelezőprogramod küldi el a <span class="text-gray-300 font-mono select-text">feedback@zseli.hu</span> címre.</p>
+
+                        <div class="space-y-3">
+                            <textarea id="feedbackMessage" rows="5" class="w-full bg-gray-950 border border-gray-700 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all placeholder-gray-600 resize-y select-text" placeholder="Mi történt? Mit csináltál előtte, és mit vártál volna?"></textarea>
+                            <input type="text" id="feedbackContact" class="w-full bg-gray-950 border border-gray-700 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all placeholder-gray-600 select-text" placeholder="Neved vagy e-mail címed (nem kötelező, ha választ szeretnél)">
+                            <label class="flex items-start gap-2 text-sm text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="feedbackAttachLog" checked class="mt-0.5 w-4 h-4 cursor-pointer" style="accent-color: var(--brand-500)">
+                                <span>Naplófájl csatolása <span class="text-gray-500">– hibánál sokat segít. A PocketWeb, a szerverek és a telepítők naplója kerül bele (a gépen lévő mappák elérési útjával együtt).</span></span>
+                            </label>
+                        </div>
+
+                        <div id="feedbackDone" class="hidden mt-4 p-3 rounded-sm border border-green-500/30 bg-green-500/5 text-sm text-gray-300 space-y-1.5">
+                            <p id="feedbackDoneTitle" class="text-green-400 font-medium"></p>
+                            <p id="feedbackAttachHint" class="hidden">Csatold a naplót is: a <span id="feedbackFileName" class="font-mono text-white select-text"></span> fájl ki van jelölve a megnyílt mappában, húzd bele a levélbe.</p>
+                            <p id="feedbackFallbackHint" class="text-gray-400">Nem nyílt meg levelezőprogram? Küldd el webes levelezőből, vagy másold ki a szöveget:</p>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-2 mt-4">
+                            <button onclick="sendFeedback('mail')" class="bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-sm text-sm font-medium transition-colors shadow-lg shadow-brand-500/20 flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                                Levél megírása
+                            </button>
+                            <button onclick="sendFeedback('gmail')" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-sm text-sm text-gray-300 hover:text-white transition-colors">Gmail</button>
+                            <button onclick="sendFeedback('outlook')" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-sm text-sm text-gray-300 hover:text-white transition-colors" title="Outlook a böngészőben (iskolai / munkahelyi Microsoft 365 fiók)">Outlook (web)</button>
+                            <button onclick="sendFeedback('copy')" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-sm text-sm text-gray-300 hover:text-white transition-colors">Szöveg másolása</button>
+                            <button id="feedbackRevealBtn" onclick="revealFeedbackFile()" class="hidden ml-auto px-3 py-2 rounded-sm text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Napló mutatása</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-850 px-6 py-4 border-t border-gray-800 flex justify-end gap-3">
+                <button onclick="closeAboutModal()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-sm text-sm font-medium text-white transition-colors">Bezárás</button>
             </div>
         </div>
     </div>
@@ -356,7 +474,7 @@
         let sites = [];
         let thumbVersions = {};
         let siteToDelete = '';
-        let App = { os: 'windows', token: '', projectsDir: '', separator: '\\' };   // a bootstrap tölti ki
+        let App = { token: '', projectsDir: '' };   // a bootstrap tölti ki
 
         // --- API hívás: minden kérés JSON POST, az X-PocketWeb fejléccel (idegen weboldal ezt nem tudja elküldeni) ---
         async function api(action, params = {}) {
@@ -461,7 +579,7 @@
             }
         });
 
-        // --- Indulás: verziók, operációs rendszer ---
+        // --- Indulás: verziók ---
         async function bootstrap() {
             try {
                 App = await api('bootstrap');
@@ -470,18 +588,14 @@
                 return false;
             }
             document.getElementById('sbVersion').textContent = App.version;
-            document.getElementById('sbOs').textContent = '· ' + App.osLabel;
-            document.getElementById('sbPhpVer').textContent = App.php + (App.bundledPhp ? '' : ' (rendszer)');
-            document.getElementById('sbNodeVer').textContent = App.node === '-' ? 'nincs' : App.node + (App.bundledNode ? '' : ' (rendszer)');
+            document.getElementById('sbPhpVer').textContent = App.php;
+            document.getElementById('sbNodeVer').textContent = App.node || 'nincs';
             if (App.missingExtensions && App.missingExtensions.length) {
                 const warning = document.getElementById('sbExtWarning');
                 warning.textContent = 'A Laravelhez hiányzó PHP kiterjesztések: ' + App.missingExtensions.join(', ');
                 warning.classList.remove('hidden');
             }
-            const sep = App.separator;
-            document.getElementById('dbPathExample').textContent = [App.projectsDir, 'projekted', 'database', 'database.sqlite'].join(sep);
-            if (App.os !== 'windows') document.querySelector('#editorSelect option[value="notepadpp"]').remove();
-            renderDownloads();
+            document.getElementById('dbPathExample').textContent = [App.projectsDir, 'projekted', 'database', 'database.sqlite'].join('\\');
             setNotice(App.supervisor ? '' : 'A PocketWeb háttérfolyamata nem fut, ezért a szerverek és a telepítők nem indíthatók. Indítsd újra a PocketWebet!');
             return true;
         }
@@ -851,43 +965,129 @@
             setTimeout(() => settingsModal.classList.add('hidden'), 200);
         }
 
-        // Letöltési linkek az aktuális operációs rendszerhez
-        function renderDownloads() {
-            const download = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>';
-            const colors = {
-                indigo: ['hover:border-brand-500', 'bg-indigo-500/10 group-hover:bg-indigo-500/20', 'text-indigo-400'],
-                green: ['hover:border-green-500', 'bg-green-500/10 group-hover:bg-green-500/20', 'text-green-500'],
-                yellow: ['hover:border-yellow-500', 'bg-yellow-500/10 group-hover:bg-yellow-500/20', 'text-yellow-500'],
-                gray: ['hover:border-gray-400', 'bg-gray-500/10 group-hover:bg-gray-500/20', 'text-gray-400']
-            };
-            const links = {
-                windows: [
-                    ['https://windows.php.net/download/', 'PHP (Non Thread Safe verzió!)', 'Zip (x64) => rendszer/php', 'indigo'],
-                    ['https://nodejs.org/en/download/prebuilt-binaries', 'Node.js (LTS)', 'Windows Zip (x64) => rendszer/node', 'green']
-                ],
-                linux: [
-                    ['https://static-php.dev/en/guide/manual-build.html', 'PHP: csomagkezelő vagy statikus PHP', 'sudo apt install php-cli php-sqlite3 ... | vagy php => rendszer/php', 'indigo'],
-                    ['https://nodejs.org/en/download/prebuilt-binaries', 'Node.js (LTS)', 'Linux Binary (tar.xz) => rendszer/node', 'green']
-                ],
-                macos: [
-                    ['https://formulae.brew.sh/formula/php', 'PHP: Homebrew vagy statikus PHP', 'brew install php | vagy php => rendszer/php', 'indigo'],
-                    ['https://nodejs.org/en/download/prebuilt-binaries', 'Node.js (LTS)', 'macOS Binary (tar.gz) => rendszer/node', 'green']
-                ]
-            }[App.os] || [];
-            links.push(['https://getcomposer.org/download/', 'Composer', 'composer.phar => rendszer/php', 'yellow']);
-            links.push(['https://www.adminer.org/', 'Adminer', 'adminer.php (nevezd át) => rendszer/ mappa', 'gray']);
+        // --- Névjegy Modal (verziók, visszajelzés küldése) ---
+        const aboutModal = document.getElementById('aboutModal');
+        const aboutModalContent = document.getElementById('aboutModalContent');
+        let aboutLoaded = false;
 
-            document.getElementById('downloadsGrid').innerHTML = links.map(([url, title, hint, color]) => `
-                <a href="${url}" target="_blank" class="flex items-center gap-3 px-4 py-3 bg-gray-900 border border-gray-700 ${colors[color][0]} rounded-sm text-sm text-gray-300 hover:text-white transition-colors group">
-                    <div class="w-8 h-8 shrink-0 rounded ${colors[color][1]} flex items-center justify-center">
-                        <svg class="w-5 h-5 ${colors[color][2]}" fill="none" stroke="currentColor" viewBox="0 0 24 24">${download}</svg>
-                    </div>
-                    <div class="min-w-0">
-                        <div class="font-medium">${escapeHtml(title)}</div>
-                        <div class="text-xs text-gray-500 truncate">${escapeHtml(hint)}</div>
-                    </div>
-                </a>`).join('');
+        async function openAboutModal() {
+            aboutModal.classList.remove('hidden');
+            setTimeout(() => {
+                aboutModalContent.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+            if (window.innerWidth < 768 && !document.getElementById('sidebar').classList.contains('-translate-x-full')) toggleSidebar();
+            if (aboutLoaded) return;
+            try {
+                renderAbout(await api('about'));
+                aboutLoaded = true;
+            } catch (e) {
+                document.getElementById('aboutComponents').textContent = 'Nem sikerült lekérni a verziókat.';
+            }
         }
+
+        function closeAboutModal() {
+            aboutModalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => aboutModal.classList.add('hidden'), 200);
+        }
+
+        function renderAbout(about) {
+            document.getElementById('aboutVersion').textContent = about.version;
+            const items = [
+                ['PHP', about.php], ['Node.js', about.node || 'nincs bemásolva'], ['Composer', about.composer || '-'],
+                ['Adminer', about.adminer || '-'], ['xterm.js', '6.0.0'], ['Tailwind CSS', '3.4.17']
+            ];
+            document.getElementById('aboutComponents').innerHTML = items.map(([name, version]) => `
+                <div class="px-3 py-2 bg-gray-900 border border-gray-800 rounded-sm min-w-0">
+                    <div class="text-xs text-gray-500">${escapeHtml(name)}</div>
+                    <div class="text-gray-200 font-mono text-xs truncate" title="${escapeHtml(version)}">${escapeHtml(version)}</div>
+                </div>`).join('');
+            document.getElementById('aboutSystem').textContent = about.windows + (about.browser ? ' · Vezérlőpult: ' + about.browser : '');
+        }
+
+        // Visszajelzés: a PocketWeb összeállítja a levelet (és kérésre a napló ZIP-et), a küldés a saját levelezőből megy
+        const feedback = { prepared: null, dirty: true, revealed: false };
+        for (const id of ['feedbackMessage', 'feedbackContact', 'feedbackAttachLog']) {
+            for (const type of ['input', 'change']) {
+                document.getElementById(id).addEventListener(type, () => {
+                    feedback.dirty = true;
+                    document.getElementById('feedbackDone').classList.add('hidden');
+                });
+            }
+        }
+
+        async function sendFeedback(via) {
+            const messageInput = document.getElementById('feedbackMessage');
+            if (!messageInput.value.trim()) {
+                showToast('Írd le röviden, mi a visszajelzésed!', 'error');
+                messageInput.focus();
+                return;
+            }
+            try {
+                if (feedback.dirty || !feedback.prepared) {
+                    feedback.prepared = await api('feedback_prepare', {
+                        message: messageInput.value,
+                        contact: document.getElementById('feedbackContact').value,
+                        attachLog: document.getElementById('feedbackAttachLog').checked
+                    });
+                    feedback.dirty = false;
+                    feedback.revealed = false;
+                }
+                const prepared = feedback.prepared;
+                let title;
+                if (via === 'copy') {
+                    await copyText(`Címzett: ${prepared.email}\nTárgy: ${prepared.subject}\n\n${prepared.body}`);
+                    title = `A levél szövege a vágólapon van: illeszd be egy új levélbe, címzett: ${prepared.email}`;
+                } else {
+                    await api('open_url', { url: { mail: prepared.mailto, gmail: prepared.gmail, outlook: prepared.outlook }[via] });
+                    if (via === 'mail' && prepared.truncated) {
+                        await copyText(prepared.body);
+                        showToast('A levélbe csak a szöveg eleje fért bele, a teljes szöveg a vágólapon van.', 'info');
+                    }
+                    title = via === 'mail'
+                        ? 'A levél megnyílt a levelezőprogramodban: ellenőrizd, és küldd el!'
+                        : 'A levél megnyílt a böngésződben: ellenőrizd, és küldd el!';
+                }
+                if (prepared.file && !feedback.revealed) {
+                    await api('reveal_file', { file: prepared.file });
+                    feedback.revealed = true;
+                }
+                document.getElementById('feedbackDoneTitle').textContent = title;
+                document.getElementById('feedbackFileName').textContent = prepared.fileName || '';
+                document.getElementById('feedbackAttachHint').classList.toggle('hidden', !prepared.file);
+                document.getElementById('feedbackFallbackHint').classList.toggle('hidden', via !== 'mail');
+                document.getElementById('feedbackRevealBtn').classList.toggle('hidden', !prepared.file);
+                document.getElementById('feedbackDone').classList.remove('hidden');
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        function revealFeedbackFile() {
+            if (feedback.prepared && feedback.prepared.file) runAction('reveal_file', { file: feedback.prepared.file });
+        }
+
+        async function copyText(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+            } catch (e) {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.opacity = '0';
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                textArea.remove();
+            }
+        }
+
+        // A data-external linkek a rendszer alapértelmezett böngészőjében nyílnak meg (nem a vezérlőpult ablakában)
+        document.addEventListener('click', (event) => {
+            const link = event.target.closest('a[data-external]');
+            if (!link) return;
+            event.preventDefault();
+            openUrl(link.href);
+        });
 
         function updateBrandColor(color) {
             document.documentElement.style.setProperty('--brand-500', color);

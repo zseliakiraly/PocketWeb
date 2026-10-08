@@ -158,25 +158,14 @@ if (($_SERVER['HTTP_X_POCKETWEB'] ?? '') !== '1') {
 Runtime::touch('heartbeat');   // a felügyelő ebből tudja, hogy a vezérlőpult még nyitva van
 
 if ($action === 'bootstrap' || $action === 'get_versions') {
-    $node = Platform::node();
-    $nodeVersion = '-';
-    if ($node) {
-        $out = trim((string)@shell_exec(escapeshellarg($node) . ' -v 2>&1'));
-        if (preg_match('/^v?\d+\.\d+\.\d+$/', $out)) $nodeVersion = $out;
-    }
-    $laravelExtensions = ['openssl', 'mbstring', 'pdo_sqlite', 'fileinfo', 'tokenizer', 'dom', 'xml', 'ctype', 'filter', 'curl'];
+    $laravelExtensions = ['openssl', 'mbstring', 'pdo_sqlite', 'fileinfo', 'tokenizer', 'dom', 'xml', 'ctype', 'filter', 'curl', 'zip'];
     $info = Runtime::supervisor();
     respond([
         'version' => PW_VERSION,
-        'os' => Platform::os(),
-        'osLabel' => Platform::osLabel(),
         'php' => PHP_VERSION,
-        'node' => $nodeVersion,
-        'bundledPhp' => Platform::isInside(PHP_BINARY, PW_SYS),
-        'bundledNode' => $node !== null && Platform::isInside($node, PW_SYS),
+        'node' => Feedback::nodeVersion(),
         'missingExtensions' => array_values(array_filter($laravelExtensions, function ($e) { return !extension_loaded($e); })),
         'projectsDir' => PW_PROJECTS,
-        'separator' => DIRECTORY_SEPARATOR,
         'supervisor' => Runtime::supervisorAlive(),
         'mode' => $info['mode'] ?? null,
         'token' => $info['token'] ?? '',
@@ -318,11 +307,53 @@ if ($action === 'open_browser') {
     launch(Platform::openSpec('http://' . PW_HOST . ':' . Sites::port($dir) . '/'));
 }
 
-// A Terminál panelen kattintott linkek
+// A Terminál panelen kattintott linkek és a visszajelzés levele (mailto:, Gmail, Outlook)
 if ($action === 'open_url') {
     $url = (string)input('url', '');
-    if (strlen($url) > 2048 || !preg_match('#^https?://[^\s"<>\x00-\x1f]+$#i', $url)) fail('Érvénytelen cím.');
+    if (strlen($url) > 8192 || !preg_match('#^(https?://|mailto:)[^\s"<>\x00-\x1f]+$#i', $url)) fail('Érvénytelen cím.');
     launch(Platform::openSpec($url));
+}
+
+// Névjegy ablak: verziók
+if ($action === 'about') {
+    $info = Runtime::supervisor();
+    respond([
+        'version' => PW_VERSION,
+        'windows' => Platform::windowsVersion(),
+        'php' => PHP_VERSION,
+        'node' => Feedback::nodeVersion(),
+        'composer' => Feedback::composerVersion(),
+        'adminer' => Feedback::adminerVersion(),
+        'browser' => $info['browser'] ?? null,
+        'email' => PW_FEEDBACK_EMAIL,
+        'repo' => PW_REPO_URL,
+    ]);
+}
+
+// Visszajelzés: a levél szövege és linkjei, kérésre napló ZIP a visszajelzes\ mappába
+if ($action === 'feedback_prepare') {
+    $message = trim((string)input('message', ''));
+    $contact = trim((string)input('contact', ''));
+    if ($message === '') fail('Írd le röviden, mi a visszajelzésed!');
+    if (strlen($message) > 20000) fail('A szöveg túl hosszú (legfeljebb kb. 20 000 karakter).');
+    if (strlen($contact) > 200) fail('Az elérhetőség túl hosszú.');
+    $file = null;
+    if (input('attachLog')) {
+        try {
+            $file = Feedback::createLogArchive();
+        } catch (Throwable $e) {
+            fail('Nem sikerült elkészíteni a napló fájlt: ' . $e->getMessage(), 500);
+        }
+    }
+    respond(array_merge(['success' => true, 'file' => $file, 'fileName' => $file ? basename($file) : null,
+        'email' => PW_FEEDBACK_EMAIL], Feedback::compose($message, $contact, $file)));
+}
+
+// A csatolandó napló megmutatása az Intézőben (kijelölve, hogy a levélbe húzható legyen)
+if ($action === 'reveal_file') {
+    $file = (string)input('file', '');
+    if (!Feedback::isArchive($file)) fail('A napló fájl nem található.', 404);
+    launch(Platform::revealFileSpec((string)realpath($file)));
 }
 
 if ($action === 'open_editor') {

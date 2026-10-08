@@ -1,60 +1,29 @@
 # PocketWeb
-verzió 3.0
+verzió 3.0 – Windows változat
 
-A PocketWeb egy hordozható, faék egyszerűségű webfejlesztő eszköz. Telepítés nélkül, rendszergazdai jogok nélkül futtatható. Csak kibontod és már használhatod is!
-
-Működik **Windowson**, a nagyobb **Linux** disztribúciókon (Ubuntu, Debian, Mint, Fedora, Arch, openSUSE…) és **macOS-en** is.
+A PocketWeb egy hordozható, faék egyszerűségű webfejlesztő eszköz Windowsra. Telepítés nélkül, rendszergazdai jogok nélkül futtatható. Csak kibontod és már használhatod is!
 
 Mellékelt eszközök: php, node.js, Composer és Adminer
 
+> A GitHubon a `rendszer\php` és a `rendszer\node` mappa csak a leírást tartalmazza: a php.exe és a node.exe a kész (letölthető) csomagban van benne. Ha a forrásból állítod össze, lásd a mappákban lévő `DOWNLOAD.me` fájlokat.
+
 ## Újdonságok a 3.0-ban
 
-- **Terminál panel**: nincs több felugró fekete ablak. A projektek szervereinek (`php artisan serve`, `php -S`) és a Laravel / WordPress telepítőknek a kimenete a Vezérlőpult alján, VS Code-szerű panelen jelenik meg, színesen, külön fülön minden folyamat.
-- **Linux és macOS** támogatás (`indito.sh`, `indito.command`).
+- **Terminál panel**: nincs több felugró fekete ablak. A projektek szervereinek (`php artisan serve`, `php -S`) és a Laravel / WordPress telepítőknek a kimenete a Vezérlőpult alján, VS Code-szerű panelen jelenik meg, színesen, külön fülön minden folyamat. A telepítők végén nem kell gombot nyomni: a fül jelzi, hogy kész, és értesítés is érkezik.
+- **Névjegy** ablak a verziókkal és **visszajelzés küldésével** (naplófájllal vagy anélkül) a feedback@zseli.hu címre.
 - **Kilépés gomb**, a futó szerverek állapota a kártyákon (indul / fut / máshonnan indítva / leállítva).
 - A Vezérlőpult internet nélkül is működik (helyi Tailwind), a szerkesztőket (VS Code, PhpStorm…) a szokásos telepítési helyeken is megkeresi.
 - Biztonság: más weboldalak nem tudnak a háttérben projekteket törölni vagy programot indítani a gépeden.
 
 ## Indítás és használat
 
-### Windows
-
-Kattints duplán a gyökérmappában található **indito.bat** fájlra.
+Indítás: kattints duplán a gyökérmappában található **indito.bat** fájlra.
 
 Egy pillanatra megjelenik egy ablak, ami ellenőrzi a környezetet, majd eltűnik: a PocketWeb a háttérben fut, a Vezérlőpult pedig egy izolált Edge (ha nincs, Chrome / Brave) ablakban nyílik meg.
 
 Ha végeztél, egyszerűen zárd be a Vezérlőpultot (vagy kattints a **Kilépés** gombra): a rendszer automatikusan leállít minden háttérfolyamatot.
 
 > Ha a gépen a PowerShell le van tiltva, a PocketWeb a korábbi módon, egy nyitva maradó fekete ablakban fut. Ezt ne zárd be, amíg dolgozol!
-
-### Linux
-
-Nyiss egy terminált a PocketWeb mappájában, és indítsd:
-
-```
-sh indito.sh
-```
-
-Tipp: a `sh indito.sh --parancsikon` paranccsal a PocketWeb bekerül az alkalmazások menüjébe, onnantól ikonnal is indítható.
-
-PHP-ból a rendszerre telepítettet használja, ha a `rendszer/php` mappában nincs saját (hordozható) PHP. Telepítés, ha még nincs:
-
-| Disztribúció | Parancs |
-|---|---|
-| Ubuntu, Debian, Mint | `sudo apt install php-cli php-sqlite3 php-mbstring php-xml php-curl php-zip unzip` |
-| Fedora | `sudo dnf install php-cli php-pdo php-mbstring php-xml php-process php-pecl-zip unzip` |
-| Arch, Manjaro | `sudo pacman -S php php-sqlite unzip` (majd a `/etc/php/php.ini`-ben: `extension=pdo_sqlite`) |
-| openSUSE | `sudo zypper install php8 php8-sqlite php8-mbstring php8-curl php8-zip php8-pcntl unzip` |
-
-Hordozható megoldás: egy statikus PHP (https://static-php.dev) a `rendszer/php` mappába másolva, telepítés nélkül működik.
-
-A Vezérlőpult külön ablakban nyílik, ha van Chrome, Chromium, Edge vagy Brave a gépen. Ha csak Firefox van, az alapértelmezett böngészőben nyílik meg; ilyenkor a **Kilépés** gombbal (vagy a terminálban Ctrl+C-vel) állítható le.
-
-### macOS
-
-Kattints duplán az **indito.command** fájlra. (Első alkalommal: jobb klikk → Megnyitás, mert a letöltött fájlokat a macOS alapból blokkolja. Ha a letöltött PHP/Node sem indul, a PocketWeb mappájában: `xattr -dr com.apple.quarantine .`)
-
-PHP: `brew install php`, vagy statikus PHP (https://static-php.dev) a `rendszer/php` mappába. Node.js: `brew install node`, vagy a hivatalos macOS binary a `rendszer/node` mappába.
 
 ## A Vezérlőpult használata
 ___________________________
@@ -64,13 +33,13 @@ A jobb felső sarokban található Új Projekt gombra kattintva válaszd ki a k�
 
 Add meg a projekt nevét (szóközök és ékezetek nélkül, pl. elso-webshop).
 
-A rendszer létrehozza a projektek/ mappában a szükséges fájlokat. Laravel és WordPress esetén a telepítés a háttérben fut (1-2 perc), a folyamata a **Terminál panelen** követhető. Amíg tart, a kártyán „Telepítés folyamatban…” látszik; a végéről értesítés érkezik.
+A rendszer létrehozza a projektek\ mappában a szükséges fájlokat. Laravel és WordPress esetén a telepítés a háttérben fut (1-2 perc), a folyamata a **Terminál panelen** követhető. Amíg tart, a kártyán „Telepítés folyamatban…” látszik; a végéről értesítés érkezik, gombot nyomni nem kell.
 ___________________________
 2. Kártyák és Műveletek
 
 Minden létrehozott projekted egy kártyaként jelenik meg. A kártya alján az alábbi gyorsgombokat találod:
 
-Mappa megnyitása: közvetlenül megnyitja a projekt fájljait a fájlkezelőben (Windows Intéző, Finder, Fájlok…).
+Mappa megnyitása: közvetlenül megnyitja a projekt fájljait a Windows Intézőben.
 
 Parancssor: külön parancssor ablakot nyit a projekt mappájában (a php, composer, node és npm parancsok itt azonnal működnek!).
 
@@ -88,7 +57,7 @@ Ezeken túl a kártya tetején lehetőség van snapshotot csinálni a weboldalak
 ___________________________
 3. Terminál panel
 
-A Vezérlőpult alján, a VS Code termináljához hasonló panel. Minden elindított szervernek és telepítőnek saját füle van, a fül előtti pötty mutatja az állapotát (zöld: fut, sárga: indul / leáll, piros: hibával állt le).
+A Vezérlőpult alján, a VS Code termináljához hasonló panel, ami a háttérben futó programok kimenetét mutatja (gépelni nem kell bele). Minden elindított szervernek és telepítőnek saját füle van, a fül előtti pötty mutatja az állapotát (zöld: fut, sárga: indul / leáll, piros: hibával állt le).
 
 - Megnyitás / elrejtés: a fejléc Terminál gombja, az oldalsáv Terminál menüpontja vagy **Ctrl+`**.
 - A panel magassága a felső szélénél húzva állítható.
@@ -107,8 +76,8 @@ User: root
 Password: (rákattintással másolható!)
 Database: (az adatbázis fájl helye)
 
-Laravel adatbázis helye: .../PocketWeb/projektek/LaraProjekted/database/database.sqlite
-Wordpress adatbázis helye: .../PocketWeb/projektek/WpProjekted/wp-content/database/.ht.sqlite
+Laravel adatbázis helye: ...\PocketWeb\projektek\LaraProjekted\database\database.sqlite
+Wordpress adatbázis helye: ...\PocketWeb\projektek\WpProjekted\wp-content\database\.ht.sqlite
 ___________________________
 5. Beállítások
 
@@ -116,20 +85,30 @@ A beállításokban három dolgot lehet csinálni:
 
 - Kiválasztani a témaszínt a default narancs helyett.
 
-- Kiválasztani a külső szerkesztőt (VS Code, Sublime Text, Notepad++ – csak Windowson –, PhpStorm, WebStorm). A PocketWeb a szokásos telepítési helyeken és a PATH-ban is keresi őket.
+- Kiválasztani a külső szerkesztőt (VS Code, Sublime Text, Notepad++, PhpStorm, WebStorm). A PocketWeb a szokásos telepítési helyeken és a PATH-ban is keresi őket.
 
-- Linkek a csomagolt php, nodejs, composer és adminer letöltőoldalaihoz (az aktuális operációs rendszernek megfelelően).
+- Linkek a csomagolt php, nodejs, composer és adminer letöltőoldalaihoz.
+___________________________
+6. Névjegy és visszajelzés
+
+A Névjegy ablakban látszanak a PocketWeb és az összetevők (PHP, Node.js, Composer, Adminer) verziói, valamint innen küldhetsz visszajelzést a feedback@zseli.hu címre:
+
+- Írd le, mi történt, és ha választ szeretnél, add meg a neved vagy az e-mail címed.
+- A **Naplófájl csatolása** bepipálásával a PocketWeb egy ZIP fájlt készít a `visszajelzes\` mappába (a PocketWeb, a szerverek és a telepítők naplója, a verziók és a projektek neve). A mappa megnyílik az Intézőben, a fájl ki van jelölve: húzd bele a levélbe.
+- A **Levél megírása** gomb a gépen beállított levelezőprogramban (pl. Outlook) nyitja meg a kitöltött levelet. Ha nincs ilyen, a **Gmail** vagy az **Outlook (web)** gomb a böngészőben nyitja meg, a **Szöveg másolása** pedig a vágólapra teszi a levelet.
+
+A levelet mindig te küldöd el, a saját fiókodból: a PocketWeb semmit nem küld el a tudtod nélkül.
 
 ## Hibaelhárítás
 
-- A PocketWeb naplója: `rendszer/.run/pocketweb.log` (Windowson a háttérben futó folyamat üzenetei is ide kerülnek).
-- Ha a 8181-es port foglalt, másik porttal is indítható: a `POCKETWEB_PORT` környezeti változóval (pl. Linuxon `POCKETWEB_PORT=8282 sh indito.sh`).
-- A Vezérlőpult böngészője a `POCKETWEB_BROWSER` környezeti változóval választható (a böngésző útvonala, vagy `none` az alapértelmezett böngészőhöz).
-- Ha a Laravelhez szükséges PHP kiterjesztések hiányoznak, azt a Vezérlőpult bal alsó sarka jelzi, a telepítő pedig kiírja a Terminál panelre.
+- A PocketWeb naplója: `rendszer\.run\pocketweb.log` (a háttérben futó folyamat üzenetei ide kerülnek).
+- Ha a 8181-es port foglalt, másik porttal is indítható a `POCKETWEB_PORT` környezeti változóval (pl. parancssorból: `set POCKETWEB_PORT=8282` majd `indito.bat`).
+- A Vezérlőpult böngészője a `POCKETWEB_BROWSER` környezeti változóval választható (a böngésző .exe útvonala, vagy `none` az alapértelmezett böngészőhöz).
+- Ha a Laravelhez szükséges PHP kiterjesztések hiányoznak, azt a Vezérlőpult bal alsó sarka jelzi, a telepítő pedig kiírja a Terminál panelre (a `rendszer\php\php.ini`-ben kell bekapcsolni őket).
 
 ## Felépítés (fejlesztőknek)
 
-- `indito.bat` / `indito.sh` / `indito.command` → elindítja a **felügyelőt** (`rendszer/pocketweb.php`).
-- A felügyelő indítja a Vezérlőpult szerverét (`php -S 127.0.0.1:8181`, útválasztó: `rendszer/router.php`), megnyitja a böngészőablakot, futtatja a háttérfeladatokat (szerverek, telepítők), és a Vezérlőpult bezárásakor mindent leállít.
-- A Vezérlőpult (`rendszer/index.html`) az `api.php`-n keresztül kéri a feladatokat; az `api.php` ezeket üzenetsoron (`rendszer/.run/queue`) adja át a felügyelőnek, a kimenetük pedig a `rendszer/.run/jobs/` alatti naplófájlokból jut el a Terminál panelre.
-- Közös kód: `rendszer/lib/` (operációs rendszer függő műveletek: `Platform.php`), telepítők: `rendszer/tasks/`, terminál megjelenítő: `rendszer/vendor/xterm` (xterm.js, MIT licenc).
+- `indito.bat` → a mellékelt `rendszer\php\php.exe`-vel elindítja a **felügyelőt** (`rendszer\pocketweb.php`), rejtett ablakban.
+- A felügyelő indítja a Vezérlőpult szerverét (`php -S 127.0.0.1:8181`, útválasztó: `rendszer\router.php`), megnyitja a böngészőablakot, futtatja a háttérfeladatokat (szerverek, telepítők), és a Vezérlőpult bezárásakor mindent leállít.
+- A Vezérlőpult (`rendszer\index.html`) az `api.php`-n keresztül kéri a feladatokat; az `api.php` ezeket üzenetsoron (`rendszer\.run\queue`) adja át a felügyelőnek, a kimenetük pedig a `rendszer\.run\jobs\` alatti naplófájlokból jut el a Terminál panelre.
+- Közös kód: `rendszer\lib\` (a Windows-műveletek: `Platform.php`, visszajelzés: `Feedback.php`), telepítők: `rendszer\tasks\`, terminál megjelenítő: `rendszer\vendor\xterm` (xterm.js, MIT licenc).

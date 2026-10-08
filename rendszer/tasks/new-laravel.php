@@ -17,12 +17,10 @@ $missing = array_filter(['openssl', 'mbstring', 'pdo_sqlite', 'fileinfo', 'token
 });
 if ($missing) {
     warn('Hiányzó PHP kiterjesztések: ' . implode(', ', $missing));
-    warn(Platform::isWindows()
-        ? 'Kapcsold be őket a rendszer/php/php.ini fájlban (extension=...).'
-        : 'Telepítsd őket, pl. Ubuntu/Debian: sudo apt install php-sqlite3 php-mbstring php-xml php-curl php-zip');
+    warn('Kapcsold be őket a rendszer\\php\\php.ini fájlban (extension=...).');
 }
-if (!extension_loaded('zip') && (Platform::isWindows() || !Platform::which('unzip'))) {
-    warn('Nincs zip kiterjesztés és unzip parancs sem – a Composer nem fogja tudni kibontani a csomagokat.');
+if (!extension_loaded('zip')) {
+    warn('Nincs bekapcsolva a zip kiterjesztés (php.ini: extension=zip) – a Composer nem fogja tudni kibontani a csomagokat.');
 }
 $composer = Platform::composerPhar();
 if (!is_file($composer)) fail('Nem található a Composer: ' . $composer);

@@ -73,19 +73,16 @@ function download(string $url, string $dest): bool
     return true;
 }
 
-/** ZIP kibontása: PHP zip kiterjesztéssel, ha nincs, az unzip paranccsal (Linux/macOS). */
+/** ZIP kibontása a PHP zip kiterjesztésével (a mellékelt php.ini bekapcsolja: extension=zip). */
 function unzip(string $zipFile, string $target): bool
 {
-    if (class_exists('ZipArchive')) {
-        $zip = new ZipArchive();
-        if ($zip->open($zipFile) !== true) return false;
-        $ok = $zip->extractTo($target);
-        $zip->close();
-        return $ok;
+    if (!class_exists('ZipArchive')) {
+        warn('A kibontáshoz a PHP zip kiterjesztése kell: a rendszer\\php\\php.ini-ben legyen bekapcsolva (extension=zip).');
+        return false;
     }
-    if (!Platform::isWindows() && Platform::which('unzip')) {
-        return run(['unzip', '-q', '-o', $zipFile, '-d', $target]) === 0;
-    }
-    warn('A kibontáshoz a PHP zip kiterjesztése (vagy Linuxon/macOS-en az unzip parancs) szükséges.');
-    return false;
+    $zip = new ZipArchive();
+    if ($zip->open($zipFile) !== true) return false;
+    $ok = $zip->extractTo($target);
+    $zip->close();
+    return $ok;
 }

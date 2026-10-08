@@ -21,16 +21,14 @@ if (Sites::needsServer($type)) {
 }
 
 $browser = Platform::findBrowser();
-if (!$browser) fail('Nem található Chromium alapú böngésző (Edge, Chrome, Chromium) a képernyőképhez.');
+if (!$browser) fail('A képernyőképhez Microsoft Edge vagy Google Chrome kell.');
 
 @mkdir(PW_RUN, 0777, true);
 $tmp = pw_path(PW_RUN, 'thumb-' . getmypid() . '.png');
 @unlink($tmp);
 $cmd = [$browser['path'], '--headless', '--disable-gpu', '--hide-scrollbars', '--no-first-run', '--no-default-browser-check',
     '--allow-file-access-from-files', '--window-size=1024,768', '--user-data-dir=' . pw_path(PW_RUN, 'thumb-profile'),
-    '--screenshot=' . $tmp];
-if (Platform::runningAsRoot()) $cmd[] = '--no-sandbox';
-$cmd[] = $url;
+    '--screenshot=' . $tmp, $url];
 
 $pipes = [];
 $proc = proc_open($cmd, [0 => ['null'], 1 => ['null'], 2 => ['null']], $pipes, PW_RUN);
