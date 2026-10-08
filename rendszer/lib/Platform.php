@@ -57,6 +57,36 @@ class Platform
         return null;
     }
 
+    /** Egy registry érték ($name === '': a kulcs alapértelmezett értéke), vagy null, ha nincs. */
+    public static function regValue(string $key, string $name = ''): ?string
+    {
+        $value = $name === '' ? ' /ve' : ' /v ' . escapeshellarg($name);
+        return self::parseRegValue((string)@shell_exec('reg query ' . escapeshellarg($key) . $value . ' 2>NUL'));
+    }
+
+    /** A "reg query" kimenetéből az érték ("(nincs érték beállítva)" és üres → null). */
+    public static function parseRegValue(string $output): ?string
+    {
+        if (!preg_match('/\sREG_(?:EXPAND_)?SZ(?:[ \t]{4}(.*?))?[ \t]*\r?$/m', $output, $m)) return null;
+        $value = trim($m[1] ?? '');
+        return ($value === '' || $value[0] === '(') ? null : $value;
+    }
+
+    /** Az URL-típust (http, mailto) alapból megnyitó program neve, pl. "chrome.exe", vagy null. */
+    public static function defaultHandlerExe(string $scheme): ?string
+    {
+        $progId = self::regValue('HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\' . $scheme . '\\UserChoice', 'ProgId');
+        $command = $progId !== null ? self::regValue('HKCR\\' . $progId . '\\shell\\open\\command') : null;
+        $command = $command ?? self::regValue('HKCR\\' . $scheme . '\\shell\\open\\command');
+        return $command !== null ? self::commandExe($command) : null;
+    }
+
+    /** A program neve egy parancssorból ('"C:\\...\\chrome.exe" --single-argument %1' → "chrome.exe"). */
+    public static function commandExe(string $command): ?string
+    {
+        return preg_match('/([^\\\\\/"]+\.exe)\b/i', $command, $m) ? strtolower($m[1]) : null;
+    }
+
     /** Windows verzió a névjegyhez és a visszajelzéshez (gépnév nélkül). */
     public static function windowsVersion(): string
     {
@@ -190,6 +220,10 @@ class Platform
 
     // ------------------------------------------------------------------
     // Programok indítása ("launch spec": ['argv' => [...]] vagy ['cmdline' => '...'])
+    // A 'focus' kulcs leírja, melyik ablakot kell a felügyelőnek előtérbe hoznia (WinFocus.php):
+    // exe / class (az ablak programja, osztálya), title (a címében szerepel), existingAfter (ennyi
+    // másodperc után egy már korábban is nyitott ablak is jó), handler (az exe az alapértelmezett
+    // programból: http, mailto), timeout.
     // ------------------------------------------------------------------
 
     /** Launch spec végrehajtása – a felügyelő hívja, hogy a program ne örökölje a webszerver socketjeit. */
@@ -226,24 +260,40 @@ class Platform
     /** Mappa megnyitása az Intézőben. */
     public static function openFolderSpec(string $dir): array
     {
-        return ['argv' => ['explorer.exe', $dir]];
+        return ['argv' => ['explorer.exe', $dir], 'focus' => self::explorerFocus($dir)];
     }
 
     /** Az Intéző megnyitása úgy, hogy a fájl ki legyen jelölve (pl. a visszajelzéshez csatolandó napló). */
     public static function revealFileSpec(string $file): array
     {
         if (strpos($file, '"') !== false) throw new InvalidArgumentException('Érvénytelen fájlnév.');
-        return ['cmdline' => 'explorer.exe /select,"' . $file . '"'];
+        return ['cmdline' => 'explorer.exe /select,"' . $file . '"', 'focus' => self::explorerFocus(dirname(str_replace('\\', '/', $file)))];
     }
 
-    /** URL (http, https, file, mailto) vagy fájl megnyitása az alapértelmezett programmal. */
+    /** Az Intéző ablaka a mappa nevét viseli címként (ha a mappa már nyitva van, azt az ablakot hozza elő). */
+    private static function explorerFocus(string $dir): array
+    {
+        return ['class' => 'CabinetWClass', 'title' => basename(str_replace('\\', '/', $dir)), 'existingAfter' => 1.5, 'timeout' => 10];
+    }
+
+    /**
+     * URL (http, https, mailto) vagy fájl megnyitása az alapértelmezett programmal, a "start" paranccsal
+     * (mint a korábbi PocketWeb). A cél környezeti változóban megy át, így a cmd.exe nem értelmezi a benne
+     * lévő %-jeleket (pl. %20) és a különleges karaktereket (&, ^).
+     */
     public static function openSpec(string $target): array
     {
-        if (preg_match('#^(https?://|file://|mailto:)#i', $target)) {
-            // URL-eknél nem használunk cmd.exe-t: a %-kódolt karaktereket környezeti változónak nézné
-            return ['argv' => ['rundll32.exe', 'url.dll,FileProtocolHandler', $target]];
-        }
-        return ['cmdline' => self::cmdStart('', [$target], null, false)];
+        if ($target === '' || strpbrk($target, "\"\r\n\0") !== false) throw new InvalidArgumentException('Érvénytelen cím.');
+        $env = getenv();
+        if (!is_array($env)) $env = [];
+        $env[self::envKey($env, 'PW_OPEN')] = $target;
+        $mail = stripos($target, 'mailto:') === 0;
+        return [
+            'cmdline' => (getenv('ComSpec') ?: 'cmd.exe') . ' /d /v:off /s /c "start "" "%PW_OPEN%""',
+            'env' => $env,
+            // a böngésző az új lapot a legutóbb használt ablakában nyitja meg: ha nincs új ablak, azt hozzuk elő
+            'focus' => ['handler' => $mail ? 'mailto' : 'http', 'existingAfter' => $mail ? 2.0 : 1.0, 'timeout' => 15],
+        ];
     }
 
     /** Parancssor ablak a projekt mappájában; a PATH-ban a mellékelt php, composer, node és npm. */
@@ -274,15 +324,15 @@ class Platform
             $found[] = $local . '\\JetBrains\\Toolbox\\scripts\\' . strtolower($product) . '.cmd';
             return $found;
         };
-        // [ismert telepítési helyek, PATH-ban keresett nevek, extra argumentumok]
+        // [ismert telepítési helyek, PATH-ban keresett nevek, extra argumentumok, az ablak programja]
         $options = [
-            'vscode'    => [[$local . '\\Programs\\Microsoft VS Code\\Code.exe', $pf . '\\Microsoft VS Code\\Code.exe'], ['code.cmd'], []],
-            'sublime'   => [[$pf . '\\Sublime Text\\sublime_text.exe', $pf . '\\Sublime Text 4\\sublime_text.exe', $pf . '\\Sublime Text 3\\sublime_text.exe'], ['subl.exe', 'sublime_text.exe'], []],
-            'notepadpp' => [[$pf . '\\Notepad++\\notepad++.exe', $pf86 . '\\Notepad++\\notepad++.exe'], ['notepad++.exe'], ['-openFoldersAsWorkspace']],
-            'phpstorm'  => [$jetbrains('PhpStorm', 'phpstorm64.exe'), ['phpstorm64.exe', 'phpstorm.cmd', 'phpstorm.bat'], []],
-            'webstorm'  => [$jetbrains('WebStorm', 'webstorm64.exe'), ['webstorm64.exe', 'webstorm.cmd', 'webstorm.bat'], []],
+            'vscode'    => [[$local . '\\Programs\\Microsoft VS Code\\Code.exe', $pf . '\\Microsoft VS Code\\Code.exe'], ['code.cmd'], [], 'code.exe'],
+            'sublime'   => [[$pf . '\\Sublime Text\\sublime_text.exe', $pf . '\\Sublime Text 4\\sublime_text.exe', $pf . '\\Sublime Text 3\\sublime_text.exe'], ['subl.exe', 'sublime_text.exe'], [], 'sublime_text.exe'],
+            'notepadpp' => [[$pf . '\\Notepad++\\notepad++.exe', $pf86 . '\\Notepad++\\notepad++.exe'], ['notepad++.exe'], ['-openFoldersAsWorkspace'], 'notepad++.exe'],
+            'phpstorm'  => [$jetbrains('PhpStorm', 'phpstorm64.exe'), ['phpstorm64.exe', 'phpstorm.cmd', 'phpstorm.bat'], [], 'phpstorm64.exe'],
+            'webstorm'  => [$jetbrains('WebStorm', 'webstorm64.exe'), ['webstorm64.exe', 'webstorm.cmd', 'webstorm.bat'], [], 'webstorm64.exe'],
         ];
-        [$paths, $commands, $args] = $options[$editor];
+        [$paths, $commands, $args, $windowExe] = $options[$editor];
 
         $exe = null;
         foreach ($paths as $path) {
@@ -300,8 +350,11 @@ class Platform
 
         $argv = array_merge([$exe], $args, [$dir]);
         $env = self::childEnv();   // így a szerkesztő termináljában is elérhető a php, composer, node
-        if (preg_match('/\.exe$/i', $exe)) return ['argv' => $argv, 'env' => $env];
-        return ['cmdline' => self::cmdStart('', $argv), 'env' => $env];   // .cmd/.bat csak cmd.exe-n keresztül
+        // a szerkesztők a projekt mappájának nevét írják a címsorba (a Notepad++ a fájlét)
+        $focus = ['exe' => $windowExe, 'title' => $editor === 'notepadpp' ? null : basename($dir),
+            'existingAfter' => $editor === 'notepadpp' ? 1.5 : 0.8, 'timeout' => 45];
+        if (preg_match('/\.exe$/i', $exe)) return ['argv' => $argv, 'env' => $env, 'focus' => $focus];
+        return ['cmdline' => self::cmdStart('', $argv), 'env' => $env, 'focus' => $focus];   // .cmd/.bat csak cmd.exe-n keresztül
     }
 
     // ------------------------------------------------------------------

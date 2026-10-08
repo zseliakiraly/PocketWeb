@@ -3,18 +3,25 @@
  * PocketWeb – Névjegy és visszajelzés küldése.
  *
  * A levelet a felhasználó saját levelezője (vagy webes levelezője) küldi el a feedback@zseli.hu
- * címre, így nem kell jelszó vagy szerver. A mailto: linkhez fájl nem csatolható automatikusan,
- * ezért a naplót egy ZIP-be tesszük a visszajelzes\ mappába, és az Intézőben kijelöljük:
- * onnan egy mozdulattal a levélbe húzható.
+ * címre, így nem kell jelszó vagy szerver. A napló egy ZIP-be kerül a visszajelzes\ mappába:
+ *  - ha a levelezőprogram tudja (MAPI: klasszikus Outlook, Thunderbird), csatolmányként megy (Mapi.php);
+ *  - különben a napló kivonata a levél szövegébe kerül. A linkekbe (mailto:, Gmail, Outlook) csak rövid
+ *    szöveg fér: ami nem fér bele, azt a vezérlőpult a vágólapra teszi, és a levélben egy sor jelzi,
+ *    hova kell beilleszteni.
  */
 class Feedback
 {
-    /** A túl hosszú mailto: linket egyes levelezők (pl. Outlook) nem nyitják meg. */
+    /** A link legnagyobb hossza: a Windows (ShellExecute) kb. 2048 karakternél levágja a hosszabbat. */
     const MAILTO_LIMIT = 1800;
-    /** A webes levelezők linkje is legyen ésszerű hosszú. */
-    const WEBMAIL_LIMIT = 6000;
+    const WEBMAIL_LIMIT = 1900;
+    /** A levél szövegébe kerülő napló kivonat legnagyobb hossza (karakter). */
+    const DIGEST_LIMIT = 6000;
     /** Ennyi napló-ZIP marad meg a visszajelzes\ mappában. */
     const KEEP_ARCHIVES = 5;
+
+    const DIGEST_TITLE = "\r\n===== Napló kivonat =====\r\n";
+    const PASTE_DIGEST = '[Ide illeszd be a vágólapról a napló kivonatát: Ctrl+V]';
+    const PASTE_MESSAGE = '[Ide illeszd be a vágólapról a levél szövegét: Ctrl+V]';
 
     // ------------------------------------------------------------------
     // Verziók (Névjegy ablak, levél alja)
@@ -44,10 +51,12 @@ class Feedback
     /** A levél aljára kerülő rövid rendszerleírás. */
     public static function systemSummary(): array
     {
+        static $summary = null;   // egy kérésen belül elég egyszer lekérdezni (node -v)
+        if ($summary !== null) return $summary;
         $info = Runtime::supervisor();
         $browser = $info['browser'] ?? null;
         if (!$browser) $browser = ($info['mode'] ?? '') === 'browser' ? 'alapértelmezett böngésző' : '?';
-        return [
+        return $summary = [
             'PocketWeb' => PW_VERSION,
             'Windows' => Platform::windowsVersion(),
             'PHP' => PHP_VERSION,
@@ -62,47 +71,44 @@ class Feedback
 
     /**
      * A levél tárgya, szövege és a megnyitásához szükséges linkek.
-     * @return array{subject:string, body:string, mailto:string, gmail:string, outlook:string, truncated:bool}
+     *  - body:     a teljes levél, a napló kivonatával (Szöveg másolása)
+     *  - mapiBody: a levél a csatolt naplóhoz (a levelezőprogram csatolja a ZIP-et), ha van napló
+     *  - links:    mail (mailto:), gmail, outlook → ['url' => link, 'paste' => ami nem fért bele (a vágólapra kerül),
+     *              'pasteKind' => 'digest' (a napló kivonata) | 'message' (a levél szövege) | null]
      */
-    public static function compose(string $message, string $contact, ?string $attachment): array
+    public static function compose(string $message, string $contact, ?string $archive = null, string $digest = ''): array
     {
         $subject = 'PocketWeb visszajelzés (v' . PW_VERSION . ')';
-        $footer = "\r\n\r\n";
-        if ($contact !== '') $footer .= 'Kapcsolat: ' . $contact . "\r\n";
-        $footer .= "--\r\n";
-        foreach (self::systemSummary() as $name => $value) $footer .= $name . ': ' . $value . "\r\n";
-        $footer .= $attachment !== null
-            ? 'Csatolt napló: ' . basename(str_replace('\\', '/', $attachment)) . "\r\n"
-            : "Csatolt napló: nincs\r\n";
-
-        $message = str_replace(["\r\n", "\r"], "\n", trim($message));
-        $message = str_replace("\n", "\r\n", $message);
-        $body = $message . $footer;
-
-        // A mailto: linkbe csak annyi fér, amennyit a levelezők biztosan megnyitnak
-        $note = "\r\n[…] (a teljes szöveg a vágólapon van, illeszd be ide)";
-        $mailtoMessage = $message;
-        $truncated = false;
-        while ($mailtoMessage !== '' && strlen(self::mailto($subject, $mailtoMessage . ($truncated ? $note : '') . $footer)) > self::MAILTO_LIMIT) {
-            $mailtoMessage = self::cut($mailtoMessage, (int)(self::length($mailtoMessage) * 0.85));
-            $truncated = true;
+        $message = str_replace("\n", "\r\n", str_replace(["\r\n", "\r"], "\n", trim($message)));
+        $digest = rtrim($digest);
+        $name = $archive !== null ? basename(str_replace('\\', '/', $archive)) : null;
+        if ($digest !== '') {
+            $footer = self::footer($contact, 'Napló: kivonat a levél végén' . ($name !== null ? ' (a teljes napló: ' . $name . ')' : ''));
+        } else {
+            $footer = self::footer($contact, 'Napló: ' . ($name ?? 'nincs mellékelve'));
         }
-        if ($truncated) $mailtoMessage .= $note;
 
-        $webBody = $body;
-        if (strlen(rawurlencode($webBody)) > self::WEBMAIL_LIMIT) {
-            $webBody = self::cut($message, 1500) . "\r\n[…]" . $footer;
-        }
+        $gmail = function (string $body) use ($subject): string {
+            return 'https://mail.google.com/mail/?view=cm&fs=1&to=' . rawurlencode(PW_FEEDBACK_EMAIL)
+                . '&su=' . rawurlencode($subject) . '&body=' . rawurlencode($body);
+        };
+        $outlook = function (string $body) use ($subject): string {
+            return 'https://outlook.office.com/mail/deeplink/compose?to=' . rawurlencode(PW_FEEDBACK_EMAIL)
+                . '&subject=' . rawurlencode($subject) . '&body=' . rawurlencode($body);
+        };
+        $mailto = function (string $body) use ($subject): string {
+            return self::mailto($subject, $body);
+        };
 
         return [
             'subject' => $subject,
-            'body' => $body,
-            'mailto' => self::mailto($subject, $mailtoMessage . $footer),
-            'gmail' => 'https://mail.google.com/mail/?view=cm&fs=1&to=' . rawurlencode(PW_FEEDBACK_EMAIL)
-                . '&su=' . rawurlencode($subject) . '&body=' . rawurlencode($webBody),
-            'outlook' => 'https://outlook.office.com/mail/deeplink/compose?to=' . rawurlencode(PW_FEEDBACK_EMAIL)
-                . '&subject=' . rawurlencode($subject) . '&body=' . rawurlencode($webBody),
-            'truncated' => $truncated,
+            'body' => $message . $footer . ($digest !== '' ? self::DIGEST_TITLE . $digest . "\r\n" : ''),
+            'mapiBody' => $name !== null ? $message . self::footer($contact, 'Csatolt napló: ' . $name) : null,
+            'links' => [
+                'mail' => self::link($mailto, self::MAILTO_LIMIT, $message, $footer, $digest),
+                'gmail' => self::link($gmail, self::WEBMAIL_LIMIT, $message, $footer, $digest),
+                'outlook' => self::link($outlook, self::WEBMAIL_LIMIT, $message, $footer, $digest),
+            ],
         ];
     }
 
@@ -110,6 +116,37 @@ class Feedback
     public static function mailto(string $subject, string $body): string
     {
         return 'mailto:' . PW_FEEDBACK_EMAIL . '?subject=' . rawurlencode($subject) . '&body=' . rawurlencode($body);
+    }
+
+    /** A levél alja: elérhetőség, verziók, a napló sorsa. */
+    private static function footer(string $contact, string $logLine): string
+    {
+        $footer = "\r\n\r\n";
+        if ($contact !== '') $footer .= 'Kapcsolat: ' . $contact . "\r\n";
+        $footer .= "--\r\n";
+        foreach (self::systemSummary() as $name => $value) $footer .= $name . ': ' . $value . "\r\n";
+        return $footer . $logLine . "\r\n";
+    }
+
+    /**
+     * Link a levélhez legfeljebb $limit hosszan. Ha minden nem fér bele, előbb a napló kivonata, aztán a
+     * levél szövege kerül a vágólapra ('paste'); a levélben a helyén egy sor jelzi, hova kell beilleszteni.
+     * @return array{url:string, paste:?string, pasteKind:?string}
+     */
+    private static function link(callable $url, int $limit, string $message, string $footer, string $digest): array
+    {
+        $digestBlock = $digest !== '' ? self::DIGEST_TITLE . $digest . "\r\n" : '';
+        $link = $url($message . $footer . $digestBlock);
+        if (strlen($link) <= $limit) return ['url' => $link, 'paste' => null, 'pasteKind' => null];
+        if ($digest !== '') {
+            $link = $url($message . $footer . self::DIGEST_TITLE . self::PASTE_DIGEST . "\r\n");
+            if (strlen($link) <= $limit) return ['url' => $link, 'paste' => $digest . "\r\n", 'pasteKind' => 'digest'];
+        }
+        $link = $url(self::PASTE_MESSAGE . $footer);
+        if (strlen($link) <= $limit) {
+            return ['url' => $link, 'paste' => $message . "\r\n" . $digestBlock, 'pasteKind' => 'message'];
+        }
+        return ['url' => $url(self::PASTE_MESSAGE), 'paste' => $message . $footer . $digestBlock, 'pasteKind' => 'message'];
     }
 
     private static function length(string $text): int
@@ -171,6 +208,68 @@ class Feedback
         }
         self::removeOldArchives();
         return $path;
+    }
+
+    /**
+     * A napló rövid kivonata a levél szövegébe (ha a levelezőprogram nem tudja csatolni a ZIP-et):
+     * a hibával leállt feladatok utolsó 15 sora, a PocketWeb naplójának vége, a többi feladat utolsó sorai.
+     */
+    public static function logDigest(int $limit = self::DIGEST_LIMIT): string
+    {
+        $failed = $others = [];
+        foreach (array_reverse(Jobs::all()) as $job) {   // a legutóbbi elöl
+            if ($job['kind'] === 'mail') continue;
+            $status = $job['status'];
+            $state = (string)($status['state'] ?? 'queued');
+            $code = $status['exitCode'] ?? null;
+            $bad = $state === 'failed' || ($state === 'exited' && $code !== 0);
+            $block = '# ' . $job['title'] . ' – ' . self::stateText($state, $code, $status['error'] ?? null) . "\r\n";
+            if (!empty($job['display'])) $block .= '> ' . $job['display'] . "\r\n";
+            $block .= self::indent(self::lastLines(self::plainText(self::tail(Jobs::logFile($job['id']), 65536)), $bad ? 15 : 4));
+            if ($bad) $failed[] = $block;
+            else $others[] = $block;
+        }
+        $log = self::lastLines(self::plainText(self::tail(Runtime::file('pocketweb.log'), 16384)), 8);
+        $blocks = array_merge($failed, $log ? ["# PocketWeb napló (vége)\r\n" . self::indent($log)] : [], $others);
+
+        $text = '';
+        foreach ($blocks as $block) {
+            if ($text !== '' && self::length($text . "\r\n" . $block) > $limit) {
+                $text .= "\r\n[…] (a többi a teljes naplóban)\r\n";
+                break;
+            }
+            $text .= ($text !== '' ? "\r\n" : '') . $block;
+        }
+        return $text;
+    }
+
+    private static function stateText(string $state, $code, ?string $error): string
+    {
+        switch ($state) {
+            case 'queued': return 'várakozik';
+            case 'running': return 'fut';
+            case 'stopping': return 'leáll';
+            case 'stopped': return 'leállítva';
+            case 'failed': return 'nem indult el' . ($error ? ': ' . $error : '');
+        }
+        return $code === 0 ? 'sikeresen befejeződött' : 'hibával leállt (kilépési kód: ' . $code . ')';
+    }
+
+    /** A szöveg utolsó $count sora (a túl hosszú sorok levágva). */
+    private static function lastLines(string $text, int $count): array
+    {
+        $text = rtrim($text);
+        if ($text === '') return [];
+        return array_map(function (string $line): string {
+            return self::length($line) > 200 ? self::cut($line, 200) . '…' : $line;
+        }, array_slice(preg_split('/\r?\n/', $text), -$count));
+    }
+
+    private static function indent(array $lines): string
+    {
+        $out = '';
+        foreach ($lines as $line) $out .= '  ' . $line . "\r\n";
+        return $out;
     }
 
     /** A visszajelzes\ mappában lévő napló-e a fájl (csak ilyet engedünk megmutatni az Intézőben). */

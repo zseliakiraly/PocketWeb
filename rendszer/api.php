@@ -114,11 +114,12 @@ if ($action === 'bye') {
     exit;
 }
 
-// Kártya háttérkép (<img> tölti be)
+// Kártya háttérkép (<img> tölti be). A cím a kép változatát (módosítási idejét) is tartalmazza, így a böngésző
+// gyorsítótárazhatja: a kártyák újrarajzolásakor nem kéri le újra.
 if ($action === 'thumbnail') {
     $name = (string)($_GET['site'] ?? '');
     $dir = Sites::dir($name);
-    header('Cache-Control: no-store');
+    header(isset($_GET['t']) ? 'Cache-Control: private, max-age=31536000, immutable' : 'Cache-Control: no-store');
     if ($dir) {
         foreach (['png' => 'png', 'jpg' => 'jpeg', 'jpeg' => 'jpeg'] as $ext => $mime) {
             $img = pw_path($dir, 'thumbnail.' . $ext);
@@ -172,8 +173,10 @@ if ($action === 'bootstrap' || $action === 'get_versions') {
     ]);
 }
 
+// A kártyák adatai – csak induláskor, a Frissítés gombra és egy új projekt elkészülésekor kéri a vezérlőpult
+// (a netstat lassú lehet, és a beépített PHP szerver egyszerre csak egy kérést szolgál ki)
 if ($action === 'get_sites') {
-    $ports = Platform::listeningPorts();
+    $ports = false;   // a netstat csak akkor fut, ha van projekt, amelynek a szerverét nem a PocketWeb indította
     $jobs = array_filter(Jobs::all(), [Jobs::class, 'isActive']);
     $sites = [];
 
@@ -195,11 +198,19 @@ if ($action === 'get_sites') {
         $needsServer = Sites::needsServer($typeId);
         // telepítés közben nem írunk a mappába (a Composer üres mappát vár)
         $port = ($needsServer && !$install) ? Sites::port($dir) : '';
-        $listening = $needsServer && !$install && Platform::isListening((int)$port, $ports);
+        $url = null;
         if ($server) {
-            $serverState = $listening ? 'running' : ($server['status']['state'] === 'stopping' ? 'stopping' : 'starting');
+            $url = Jobs::serverUrl($server['id']);
+            $listening = $url !== null;
+            $serverState = $server['status']['state'] === 'stopping' ? 'stopping' : ($listening ? 'running' : 'starting');
         } else {
+            if ($needsServer && !$install && $ports === false) $ports = Platform::listeningPorts();
+            $listening = $needsServer && !$install && Platform::isListening((int)$port, is_array($ports) ? $ports : []);
             $serverState = $listening ? 'external' : 'stopped';   // external: pl. parancssorból indították
+        }
+        $thumb = 0;
+        foreach (['png', 'jpg', 'jpeg'] as $ext) {
+            if ($thumb === 0 && is_file($image = pw_path($dir, 'thumbnail.' . $ext))) $thumb = (int)filemtime($image);
         }
 
         $sites[] = [
@@ -212,18 +223,19 @@ if ($action === 'get_sites') {
             'isRunning' => $listening,
             'serverState' => $serverState,
             'serverJob' => $server['id'] ?? null,
+            'url' => $url,
             'installing' => $install !== null,
             'installJob' => $install['id'] ?? null,
+            'thumb' => $thumb,
         ];
     }
     respond($sites);
 }
 
-// Terminál panel: a feladatok állapota és a kimenetük új része
+// Terminál panel: a feladatok állapota és a kimenetük új része (csak azoké, amelyek kimenetét a vezérlőpult kéri)
 if ($action === 'jobs') {
     $offsets = input('offsets', []);
     $offsets = is_array($offsets) ? $offsets : [];
-    $ports = input('checkPorts') ? Platform::listeningPorts() : null;
     $budget = 512 * 1024;
     $list = [];
 
@@ -245,8 +257,9 @@ if ($action === 'jobs') {
             'startedAt' => $status['startedAt'] ?? null,
             'endedAt' => $status['endedAt'] ?? null,
         ];
-        if ($ports !== null && $job['kind'] === 'server' && $item['state'] === 'running') {
-            $item['listening'] = Platform::isListening((int)$job['port'], $ports);
+        if ($job['kind'] === 'server' && $item['state'] === 'running') {
+            $item['url'] = Jobs::serverUrl($id);
+            $item['listening'] = $item['url'] !== null;
         }
         if (!$item['hidden'] && array_key_exists($id, $offsets)) {
             $chunk = Jobs::readLog($id, (int)$offsets[$id], max(4096, min(131072, $budget)));
@@ -299,12 +312,15 @@ if ($action === 'open_terminal') {
 if ($action === 'open_browser') {
     [$name, $dir] = require_site();
     if (input('mode') === 'local') {
+        // a fájlt magát nyitjuk meg (mint dupla kattintásra): így az ékezetes mappanév sem gond
         $index = pw_path($dir, 'index.html');
-        launch(is_file($index) ? Platform::openSpec(Platform::fileUrl($index)) : Platform::openFolderSpec($dir));
+        launch(is_file($index) ? Platform::openSpec($index) : Platform::openFolderSpec($dir));
     }
     $type = Sites::type($dir);
     if (!Sites::needsServer($type)) fail('Ennek a projektnek nincs szervere.');
-    launch(Platform::openSpec('http://' . PW_HOST . ':' . Sites::port($dir) . '/'));
+    $url = null;
+    foreach (site_jobs($name, 'server') as $job) $url = Jobs::serverUrl($job['id']);   // a szerver valódi címe
+    launch(Platform::openSpec($url ?? 'http://' . PW_HOST . ':' . Sites::port($dir) . '/'));
 }
 
 // A Terminál panelen kattintott linkek és a visszajelzés levele (mailto:, Gmail, Outlook)
@@ -330,7 +346,8 @@ if ($action === 'about') {
     ]);
 }
 
-// Visszajelzés: a levél szövege és linkjei, kérésre napló ZIP a visszajelzes\ mappába
+// Visszajelzés: a levél szövege és linkjei. Kérésre napló: ZIP a visszajelzes\ mappába (ezt a levelezőprogram
+// csatolja, ha tudja) és kivonat a levél szövegébe (ha a csatolás nem megy).
 if ($action === 'feedback_prepare') {
     $message = trim((string)input('message', ''));
     $contact = trim((string)input('contact', ''));
@@ -338,15 +355,47 @@ if ($action === 'feedback_prepare') {
     if (strlen($message) > 20000) fail('A szöveg túl hosszú (legfeljebb kb. 20 000 karakter).');
     if (strlen($contact) > 200) fail('Az elérhetőség túl hosszú.');
     $file = null;
+    $digest = '';
     if (input('attachLog')) {
         try {
             $file = Feedback::createLogArchive();
         } catch (Throwable $e) {
             fail('Nem sikerült elkészíteni a napló fájlt: ' . $e->getMessage(), 500);
         }
+        $digest = Feedback::logDigest();
     }
-    respond(array_merge(['success' => true, 'file' => $file, 'fileName' => $file ? basename($file) : null,
-        'email' => PW_FEEDBACK_EMAIL], Feedback::compose($message, $contact, $file)));
+    $mail = Feedback::compose($message, $contact, $file, $digest);
+
+    // A napló csatolása a levelezőprogrammal (MAPI), ha a gépen van erre alkalmas
+    $mapi = null;
+    if ($file !== null && ($client = Mapi::client()) !== null) {
+        $token = Mapi::saveMessage(['to' => PW_FEEDBACK_EMAIL, 'subject' => $mail['subject'], 'body' => $mail['mapiBody'],
+            'attachment' => $file, 'client' => $client]);
+        $mapi = ['client' => $client, 'token' => $token];
+    }
+    respond([
+        'success' => true,
+        'email' => PW_FEEDBACK_EMAIL,
+        'subject' => $mail['subject'],
+        'body' => $mail['body'],
+        'links' => $mail['links'],
+        'file' => $file,
+        'fileName' => $file ? basename($file) : null,
+        'mapi' => $mapi,
+    ]);
+}
+
+// A levél megnyitása a levelezőprogramban, a napló csatolva (rejtett feladat: tasks\send-mail.php)
+if ($action === 'feedback_mapi') {
+    $file = Mapi::messageFile((string)input('token', ''));
+    if ($file === null) fail('A levél adatai már nem érhetők el, kattints újra a gombra!', 404);
+    require_supervisor();
+    $cmd = [Platform::php()];
+    if (!extension_loaded('ffi')) array_push($cmd, '-d', 'extension=ffi');   // a mellékelt php.ini nem tölti be
+    array_push($cmd, pw_path(PW_SYS, 'tasks', 'send-mail.php'), $file);
+    $id = Jobs::create(['kind' => 'mail', 'hidden' => true, 'title' => 'Visszajelzés levél', 'cmd' => $cmd, 'cwd' => PW_RUN]);
+    Jobs::send(['op' => 'focus', 'focus' => ['handler' => 'mailto', 'timeout' => 30]]);   // a levél ablaka előre
+    respond(['success' => true, 'job' => $id]);
 }
 
 // A csatolandó napló megmutatása az Intézőben (kijelölve, hogy a levélbe húzható legyen)

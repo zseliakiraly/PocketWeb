@@ -18,6 +18,9 @@ echo Inditas folyamatban...
 SET "PW_ROOT=%BASEDIR%"
 SET "PW_PHP=%BASEDIR%rendszer\php\php.exe"
 SET "PW_SCRIPT=%BASEDIR%rendszer\pocketweb.php"
+REM Az FFI kiterjesztessel a PocketWeb eloterbe tudja hozni az altala megnyitott ablakokat (Intezo, bongeszo, szerkeszto)
+SET "PW_PHPARGS="
+if exist "%BASEDIR%rendszer\php\ext\php_ffi.dll" SET "PW_PHPARGS=-d extension=ffi"
 
 if not exist "%PW_PHP%" (
     echo.
@@ -42,7 +45,7 @@ if %ERRORLEVEL% NEQ 0 (
 
 REM 2. A PocketWeb rejtett ablakban indul, igy a szerverek es telepitok ablakai sem ugranak fel:
 REM    a kimenetuk a vezerlopult Terminal paneljen latszik. Leallitas: a vezerlopult bezarasa.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath $env:PW_PHP -ArgumentList ([char]34 + $env:PW_SCRIPT + [char]34) -WorkingDirectory $env:PW_ROOT -WindowStyle Hidden"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath $env:PW_PHP -ArgumentList ($env:PW_PHPARGS + ' ' + [char]34 + $env:PW_SCRIPT + [char]34) -WorkingDirectory $env:PW_ROOT -WindowStyle Hidden"
 if %ERRORLEVEL% EQU 0 exit /b 0
 
 REM Ha a PowerShell nem hasznalhato, a PocketWeb ebben az ablakban fut (mint a korabbi verziokban)
@@ -50,5 +53,5 @@ echo.
 echo --------------------------
 echo Ne zard be ezt az ablakot!
 echo --------------------------
-"%PW_PHP%" "%PW_SCRIPT%"
+"%PW_PHP%" %PW_PHPARGS% "%PW_SCRIPT%"
 exit /b 0

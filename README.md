@@ -10,10 +10,12 @@ Mellékelt eszközök: php, node.js, Composer és Adminer
 ## Újdonságok a 3.0-ban
 
 - **Terminál panel**: nincs több felugró fekete ablak. A projektek szervereinek (`php artisan serve`, `php -S`) és a Laravel / WordPress telepítőknek a kimenete a Vezérlőpult alján, VS Code-szerű panelen jelenik meg, színesen, külön fülön minden folyamat. A telepítők végén nem kell gombot nyomni: a fül jelzi, hogy kész, és értesítés is érkezik.
-- **Névjegy** ablak a verziókkal és **visszajelzés küldésével** (naplófájllal vagy anélkül) a feedback@zseli.hu címre.
+- **Névjegy** ablak a verziókkal és **visszajelzés küldésével** a feedback@zseli.hu címre: a napló csatolmányként megy, ha a levelezőprogram tudja (klasszikus Outlook, Thunderbird), különben a kivonata kerül a levélbe.
+- Az Intéző, a böngésző és a szerkesztő **előtérben nyílik meg**, nem a Vezérlőpult mögött.
 - **Kilépés gomb**, a futó szerverek állapota a kártyákon (indul / fut / máshonnan indítva / leállítva).
 - A Vezérlőpult internet nélkül is működik (helyi Tailwind), a szerkesztőket (VS Code, PhpStorm…) a szokásos telepítési helyeken is megkeresi.
 - Biztonság: más weboldalak nem tudnak a háttérben projekteket törölni vagy programot indítani a gépeden.
+- Kíméletes a géppel: a Vezérlőpult csak akkor kérdezi le a háttérfolyamatokat, ha fut valami (szerver, telepítés), és a projektek listáját csak induláskor, a Frissítés gombra és egy új projekt elkészülésekor tölti újra.
 
 ## Indítás és használat
 
@@ -45,7 +47,7 @@ Parancssor: külön parancssor ablakot nyit a projekt mappájában (a php, compo
 
 Megnyitás szerkesztőben: a projektet megnyitja a beállításokban kiválasztott programban (VS Code az alapértelmezett).
 
-Megnyitás böngészőben: megnyitja az elkészült weboldalt (statikus fájloknál helyiként, PHP/Laravel esetén a 127.0.0.1-es címen, ha fut a szerver).
+Megnyitás böngészőben: megnyitja az elkészült weboldalt az alapértelmezett böngészőben (statikus fájloknál az index.html-t, PHP/Laravel esetén a szerver címét, ha fut a szerver).
 
 Adatbázis megnyitása: külön ablakban paraméterezve megnyitja az Adminer felületét. A jelszót a Vezérlőpultból tudod kimásolni.
 
@@ -94,8 +96,11 @@ ___________________________
 A Névjegy ablakban látszanak a PocketWeb és az összetevők (PHP, Node.js, Composer, Adminer) verziói, valamint innen küldhetsz visszajelzést a feedback@zseli.hu címre:
 
 - Írd le, mi történt, és ha választ szeretnél, add meg a neved vagy az e-mail címed.
-- A **Naplófájl csatolása** bepipálásával a PocketWeb egy ZIP fájlt készít a `visszajelzes\` mappába (a PocketWeb, a szerverek és a telepítők naplója, a verziók és a projektek neve). A mappa megnyílik az Intézőben, a fájl ki van jelölve: húzd bele a levélbe.
-- A **Levél megírása** gomb a gépen beállított levelezőprogramban (pl. Outlook) nyitja meg a kitöltött levelet. Ha nincs ilyen, a **Gmail** vagy az **Outlook (web)** gomb a böngészőben nyitja meg, a **Szöveg másolása** pedig a vágólapra teszi a levelet.
+- A **Napló mellékelése** bepipálásával a PocketWeb egy ZIP fájlt készít a `visszajelzes\` mappába (a PocketWeb, a szerverek és a telepítők naplója, a verziók és a projektek neve).
+- A **Levél megírása** gomb a gépen beállított levelezőprogramban nyitja meg a kitöltött levelet:
+  - ha ez a klasszikus Outlook vagy a Thunderbird, a napló ZIP **csatolva** van, csak el kell küldeni;
+  - más levelezőknél (új Outlook, Gmail a böngészőben) a napló **kivonata** (a hibával leállt telepítők utolsó sorai, a PocketWeb naplójának vége) kerül a levél végére. Mivel egy levél-linkbe csak rövid szöveg fér, a kivonat a vágólapra kerül, a levélben pedig egy sor jelzi, hova kell beilleszteni (**Ctrl+V**).
+- A **Gmail** és az **Outlook (web)** gomb a böngészőben nyitja meg a levelet, a **Szöveg másolása** a teljes levelet (a kivonattal együtt) a vágólapra teszi. A teljes napló ZIP-et a **Napló mutatása** gombbal kijelölve meg is mutatja az Intéző, onnan a levélbe húzható.
 
 A levelet mindig te küldöd el, a saját fiókodból: a PocketWeb semmit nem küld el a tudtod nélkül.
 
@@ -105,10 +110,13 @@ A levelet mindig te küldöd el, a saját fiókodból: a PocketWeb semmit nem k�
 - Ha a 8181-es port foglalt, másik porttal is indítható a `POCKETWEB_PORT` környezeti változóval (pl. parancssorból: `set POCKETWEB_PORT=8282` majd `indito.bat`).
 - A Vezérlőpult böngészője a `POCKETWEB_BROWSER` környezeti változóval választható (a böngésző .exe útvonala, vagy `none` az alapértelmezett böngészőhöz).
 - Ha a Laravelhez szükséges PHP kiterjesztések hiányoznak, azt a Vezérlőpult bal alsó sarka jelzi, a telepítő pedig kiírja a Terminál panelre (a `rendszer\php\php.ini`-ben kell bekapcsolni őket).
+- Ha a megnyitott ablakok (Intéző, böngésző, szerkesztő) a Vezérlőpult mögött jelennek meg, vagy a visszajelzéshez nem csatolódik a napló: ellenőrizd, hogy megvan-e a `rendszer\php\ext\php_ffi.dll` (a PHP ZIP része, ne töröld ki).
 
 ## Felépítés (fejlesztőknek)
 
-- `indito.bat` → a mellékelt `rendszer\php\php.exe`-vel elindítja a **felügyelőt** (`rendszer\pocketweb.php`), rejtett ablakban.
+- `indito.bat` → a mellékelt `rendszer\php\php.exe`-vel elindítja a **felügyelőt** (`rendszer\pocketweb.php`), rejtett ablakban (ha megvan a `php_ffi.dll`, `-d extension=ffi` kapcsolóval).
 - A felügyelő indítja a Vezérlőpult szerverét (`php -S 127.0.0.1:8181`, útválasztó: `rendszer\router.php`), megnyitja a böngészőablakot, futtatja a háttérfeladatokat (szerverek, telepítők), és a Vezérlőpult bezárásakor mindent leállít.
-- A Vezérlőpult (`rendszer\index.html`) az `api.php`-n keresztül kéri a feladatokat; az `api.php` ezeket üzenetsoron (`rendszer\.run\queue`) adja át a felügyelőnek, a kimenetük pedig a `rendszer\.run\jobs\` alatti naplófájlokból jut el a Terminál panelre.
+- A Vezérlőpult (`rendszer\index.html`) az `api.php`-n keresztül kéri a feladatokat; az `api.php` ezeket üzenetsoron (`rendszer\.run\queue`) adja át a felügyelőnek, a kimenetük pedig a `rendszer\.run\jobs\` alatti naplófájlokból jut el a Terminál panelre. A beépített PHP szerver egyszerre csak egy kérést szolgál ki, ezért a Vezérlőpult csak akkor kérdez le, ha fut valami.
+- A programokat (Intéző, böngésző, szerkesztő) a felügyelő indítja; mivel háttérfolyamat, a Windows nem engedné az ablakukat előtérbe hozni. Ezért a felügyelő megkeresi az új ablakot, és a user32.dll-lel (PHP FFI) előre hozza (`rendszer\lib\WinFocus.php`). URL-t és fájlt a `start` paranccsal nyit meg.
+- A visszajelzés napló csatolása a Windows Simple MAPI felületével történik (`rendszer\lib\Mapi.php`, `rendszer\tasks\send-mail.php`), ugyanígy, ahogy az Intéző „Küldés → Levél címzettje” parancsa.
 - Közös kód: `rendszer\lib\` (a Windows-műveletek: `Platform.php`, visszajelzés: `Feedback.php`), telepítők: `rendszer\tasks\`, terminál megjelenítő: `rendszer\vendor\xterm` (xterm.js, MIT licenc).

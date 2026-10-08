@@ -19,6 +19,8 @@ require_once __DIR__ . '/Platform.php';
 require_once __DIR__ . '/Jobs.php';
 require_once __DIR__ . '/Sites.php';
 require_once __DIR__ . '/Feedback.php';
+require_once __DIR__ . '/Mapi.php';
+require_once __DIR__ . '/WinFocus.php';
 
 /** Útvonal összefűzése. */
 function pw_path(string ...$parts): string

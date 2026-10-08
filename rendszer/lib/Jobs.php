@@ -121,6 +121,24 @@ class Jobs
         return ['data' => $data, 'offset' => $offset + strlen($data)];
     }
 
+    /**
+     * A szerver címe a kimenetéből, amint figyel ("Server running on [http://...]" a Laravelnél, "Development
+     * Server (http://...) started" a php -S-nél), egyébként null. A Laravel foglalt port esetén a következőt
+     * választja – a cím ezt is mutatja. (Olcsóbb és pontosabb, mint a netstat.)
+     */
+    public static function serverUrl(string $id): ?string
+    {
+        $fh = @fopen(self::logFile($id), 'rb');
+        if (!$fh) return null;
+        $head = preg_replace('/\e\[[0-9;?]*[A-Za-z]/', '', (string)fread($fh, 16384));
+        fclose($fh);
+        if (preg_match('/Server running on \[?(https?:\/\/[^\s\]]+)/i', $head, $m)
+            || preg_match('/Development Server \((https?:\/\/[^)\s]+)\) started/i', $head, $m)) {
+            return rtrim($m[1], '.');
+        }
+        return null;
+    }
+
     /** A napló utolsó nem üres sora, színkódok nélkül (rövid üzenetekhez, pl. képernyőkép hibája). */
     public static function lastLine(string $id): string
     {

@@ -140,7 +140,7 @@
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                     <span id="termBadge" class="hidden absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-green-500 text-[10px] font-bold text-black leading-4 text-center"></span>
                 </button>
-                <button onclick="fetchSites(); showToast('Vezérlőpult frissítve', 'success');" class="p-2 rounded-sm hover:bg-gray-800 text-gray-400 hover:text-white transition-colors border border-transparent hover:border-gray-700" title="Vezérlőpult újratöltése">
+                <button onclick="refreshDashboard()" class="p-2 rounded-sm hover:bg-gray-800 text-gray-400 hover:text-white transition-colors border border-transparent hover:border-gray-700" title="Vezérlőpult újratöltése">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                 </button>
                 <div class="relative" id="headerActions">
@@ -426,14 +426,15 @@
                             <input type="text" id="feedbackContact" class="w-full bg-gray-950 border border-gray-700 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all placeholder-gray-600 select-text" placeholder="Neved vagy e-mail címed (nem kötelező, ha választ szeretnél)">
                             <label class="flex items-start gap-2 text-sm text-gray-300 cursor-pointer">
                                 <input type="checkbox" id="feedbackAttachLog" checked class="mt-0.5 w-4 h-4 cursor-pointer" style="accent-color: var(--brand-500)">
-                                <span>Naplófájl csatolása <span class="text-gray-500">– hibánál sokat segít. A PocketWeb, a szerverek és a telepítők naplója kerül bele (a gépen lévő mappák elérési útjával együtt).</span></span>
+                                <span>Napló mellékelése <span class="text-gray-500">– hibánál sokat segít. A PocketWeb, a szerverek és a telepítők naplója (a gépen lévő mappák elérési útjával együtt): csatolmányként, ha a levelezőprogramod tudja (pl. Outlook), különben a kivonata a levél végén.</span></span>
                             </label>
                         </div>
 
                         <div id="feedbackDone" class="hidden mt-4 p-3 rounded-sm border border-green-500/30 bg-green-500/5 text-sm text-gray-300 space-y-1.5">
                             <p id="feedbackDoneTitle" class="text-green-400 font-medium"></p>
-                            <p id="feedbackAttachHint" class="hidden">Csatold a naplót is: a <span id="feedbackFileName" class="font-mono text-white select-text"></span> fájl ki van jelölve a megnyílt mappában, húzd bele a levélbe.</p>
-                            <p id="feedbackFallbackHint" class="text-gray-400">Nem nyílt meg levelezőprogram? Küldd el webes levelezőből, vagy másold ki a szöveget:</p>
+                            <p id="feedbackDoneHint" class="hidden"></p>
+                            <p id="feedbackAttachHint" class="hidden text-gray-400">A teljes naplót is csatolhatod: a <span id="feedbackFileName" class="font-mono text-gray-200 select-text"></span> fájlt a Napló mutatása gomb jelöli ki a mappájában.</p>
+                            <p id="feedbackFallbackHint" class="hidden text-gray-400">Nem nyílt meg levelezőprogram? Küldd el webes levelezőből, vagy másold ki a szöveget:</p>
                         </div>
 
                         <div class="flex flex-wrap items-center gap-2 mt-4">
@@ -478,11 +479,18 @@
 
         // --- API hívás: minden kérés JSON POST, az X-PocketWeb fejléccel (idegen weboldal ezt nem tudja elküldeni) ---
         async function api(action, params = {}) {
-            const response = await fetch('api.php?action=' + encodeURIComponent(action), {
-                method: 'POST',
-                headers: { 'X-PocketWeb': '1', 'Content-Type': 'application/json' },
-                body: JSON.stringify(params)
-            });
+            let response;
+            try {
+                response = await fetch('api.php?action=' + encodeURIComponent(action), {
+                    method: 'POST',
+                    headers: { 'X-PocketWeb': '1', 'Content-Type': 'application/json' },
+                    body: JSON.stringify(params)
+                });
+            } catch (e) {
+                // a PocketWeb nem fut (bezárták vagy leállt)
+                if (!quitting) showOverlay('A PocketWeb nem fut', 'Megszakadt a kapcsolat a PocketWeb háttérfolyamatával. Ha bezártad, indítsd újra az indítóval, majd kattints az Újrapróbálásra.');
+                throw new Error('Nincs kapcsolat a PocketWebbel.');
+            }
             let data = null;
             try { data = await response.json(); } catch (e) { throw new Error('Érvénytelen válasz a szervertől.'); }
             if (!response.ok || (data && data.success === false)) {
@@ -600,12 +608,49 @@
             return true;
         }
 
+        // A kártyák adatai a szervertől – csak induláskor, a Frissítés gombra és egy új projekt elkészülésekor
+        // (a szerverek állapotát közben a feladatok lekérdezése frissíti, lásd syncServerSite)
         async function fetchSites() {
             try {
                 sites = await api('get_sites');
                 renderSites();
             } catch (error) {
                 console.error("Hiba az adatok lekérésekor:", error);
+            }
+        }
+
+        async function refreshDashboard() {
+            await fetchSites();
+            pollSoon();
+            showToast('Vezérlőpult frissítve', 'success');
+        }
+
+        const TYPE_LABELS = { html_css: 'HTML + CSS', html_tailwind: 'HTML + Tailwind', html_bootstrap: 'HTML + Bootstrap', wordpress: 'WordPress', laravel: 'Laravel' };
+
+        /** Egy kártya adatainak módosítása helyben (újrarajzolás csak változáskor). */
+        function updateSite(name, changes) {
+            const site = sites.find(s => s.name === name);
+            if (!site) return;
+            let changed = false;
+            for (const [key, value] of Object.entries(changes)) {
+                if (site[key] !== value) { site[key] = value; changed = true; }
+            }
+            if (changed) renderSites();
+        }
+
+        // A kártya szerver-állapota a feladat állapotából
+        function syncServerSite(job) {
+            const site = sites.find(s => s.name === job.site);
+            if (!site) return;
+            if (isActiveJob(job)) {
+                updateSite(job.site, {
+                    serverJob: job.id,
+                    serverState: job.state === 'stopping' ? 'stopping' : (job.listening ? 'running' : 'starting'),
+                    isRunning: !!job.listening,
+                    url: job.url || null
+                });
+            } else if (site.serverJob === job.id) {
+                updateSite(job.site, { serverJob: null, serverState: 'stopped', isRunning: false, url: null });
             }
         }
 
@@ -690,7 +735,7 @@
                         ${escapeHtml(badge.text)}
                     </button>` : '';
 
-                const thumbVer = thumbVersions[site.name] || '1';
+                const thumbVer = thumbVersions[site.name] || site.thumb || 0;
                 const hasDb = site.typeId === 'laravel' || site.typeId === 'wordpress';
                 const canBrowse = !site.needsServer || running;
                 const globeTitle = site.needsServer ? 'Megnyitás böngészőben (Szerver)' : 'Megnyitás böngészőben (Helyi fájl)';
@@ -827,6 +872,7 @@
         }
 
         function handleHiddenJob(job) {
+            if (feedback.mailJob && feedback.mailJob.id === job.id) return handleMailJob(job);
             if (!pendingThumbnails.has(job.id) || ['queued', 'running', 'stopping'].includes(job.state)) return;
             const siteName = pendingThumbnails.get(job.id);
             pendingThumbnails.delete(job.id);
@@ -848,10 +894,12 @@
             try {
                 await api('delete_site', { site: name });
                 showToast('Projekt sikeresen törölve!', 'success');
+                sites = sites.filter(s => s.name !== name);
+                renderSites();
             } catch(e) {
                 showToast(e.message || 'Hiba a törlés során!', 'error');
             }
-            fetchSites();
+            pollSoon();   // a projekt leállított szervereinek füle
         }
 
         async function runAction(action, params, successMessage) {
@@ -876,17 +924,19 @@
                 const res = await api('toggle_serve', { site: siteName, cols: termColumns() });
                 if (res.state === 'starting') {
                     showToast('Szerver indítása... A kimenetét a Terminál panelen látod.', 'info');
+                    updateSite(siteName, { serverState: 'starting', serverJob: res.job, isRunning: false, url: null });
                     termFocus(res.job);
                 } else if (res.state === 'stopping') {
                     showToast('Szerver leállítása...', 'info');
+                    updateSite(siteName, { serverState: 'stopping' });
                 } else {
                     showToast('A szerver leállt.', 'success');
+                    updateSite(siteName, { serverState: 'stopped', serverJob: null, isRunning: false, url: null });
                 }
                 pollSoon();
             } catch(e) {
                 showToast(e.message || 'Hiba a szerver indításakor!', 'error');
             }
-            fetchSites();
         }
 
         // --- Új Projekt Modal ---
@@ -937,15 +987,21 @@
                 const res = await api('create_project', { site: cleanName, type: typeInput, cols: termColumns() });
                 if (res.job) {
                     showToast('A telepítés elindult – a Terminál panelen követheted.', 'success');
+                    // a kártya a telepítés végéig helyben készül, a végén a get_sites hozza a valódit
+                    sites.push({ id: res.job, name: cleanName, typeId: typeInput, type: TYPE_LABELS[typeInput] || 'Projekt', port: '',
+                        needsServer: true, isRunning: false, serverState: 'stopped', serverJob: null, url: null,
+                        installing: true, installJob: res.job, thumb: 0 });
+                    sites.sort((a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0));
+                    renderSites();
                     termFocus(res.job);
                     pollSoon();
                 } else {
                     showToast('Projekt sikeresen létrehozva!', 'success');
+                    fetchSites();
                 }
             } catch (e) {
                 showToast(e.message, 'error');
             }
-            fetchSites();
         }
 
         // --- Beállítások Modal ---
@@ -1004,8 +1060,10 @@
             document.getElementById('aboutSystem').textContent = about.windows + (about.browser ? ' · Vezérlőpult: ' + about.browser : '');
         }
 
-        // Visszajelzés: a PocketWeb összeállítja a levelet (és kérésre a napló ZIP-et), a küldés a saját levelezőből megy
-        const feedback = { prepared: null, dirty: true, revealed: false };
+        // Visszajelzés: a PocketWeb összeállítja a levelet és kérésre a naplót, a küldés a saját levelezőből megy.
+        // A napló csatolmányként megy, ha a levelezőprogram tudja (MAPI: klasszikus Outlook, Thunderbird), különben
+        // a kivonata a levél szövegébe kerül – ami a linkbe nem fér bele, az a vágólapra.
+        const feedback = { prepared: null, dirty: true, mailJob: null };
         for (const id of ['feedbackMessage', 'feedbackContact', 'feedbackAttachLog']) {
             for (const type of ['input', 'change']) {
                 document.getElementById(id).addEventListener(type, () => {
@@ -1030,45 +1088,97 @@
                         attachLog: document.getElementById('feedbackAttachLog').checked
                     });
                     feedback.dirty = false;
-                    feedback.revealed = false;
                 }
                 const prepared = feedback.prepared;
-                let title;
-                if (via === 'copy') {
-                    await copyText(`Címzett: ${prepared.email}\nTárgy: ${prepared.subject}\n\n${prepared.body}`);
-                    title = `A levél szövege a vágólapon van: illeszd be egy új levélbe, címzett: ${prepared.email}`;
-                } else {
-                    await api('open_url', { url: { mail: prepared.mailto, gmail: prepared.gmail, outlook: prepared.outlook }[via] });
-                    if (via === 'mail' && prepared.truncated) {
-                        await copyText(prepared.body);
-                        showToast('A levélbe csak a szöveg eleje fért bele, a teljes szöveg a vágólapon van.', 'info');
+                if (via === 'mail' && prepared.mapi) {
+                    // a levelezőprogram maga csatolja a naplót
+                    if (feedback.mailJob) {
+                        showToast('A levél már nyitva van a levelezőprogramodban.', 'info');
+                        return;
                     }
-                    title = via === 'mail'
-                        ? 'A levél megnyílt a levelezőprogramodban: ellenőrizd, és küldd el!'
-                        : 'A levél megnyílt a böngésződben: ellenőrizd, és küldd el!';
+                    const res = await api('feedback_mapi', { token: prepared.mapi.token });
+                    feedback.mailJob = { id: res.job, started: Date.now(), prepared };
+                    showFeedbackDone(`A levél megnyílik a levelezőprogramodban (${prepared.mapi.client}), a napló csatolva: ellenőrizd, és küldd el!`,
+                        'Ha nem látod az ablakát, keresd a tálcán.', prepared, false, true);
+                    pollSoon();
+                    return;
                 }
-                if (prepared.file && !feedback.revealed) {
-                    await api('reveal_file', { file: prepared.file });
-                    feedback.revealed = true;
-                }
-                document.getElementById('feedbackDoneTitle').textContent = title;
-                document.getElementById('feedbackFileName').textContent = prepared.fileName || '';
-                document.getElementById('feedbackAttachHint').classList.toggle('hidden', !prepared.file);
-                document.getElementById('feedbackFallbackHint').classList.toggle('hidden', via !== 'mail');
-                document.getElementById('feedbackRevealBtn').classList.toggle('hidden', !prepared.file);
-                document.getElementById('feedbackDone').classList.remove('hidden');
+                await openFeedbackLink(via, prepared);
             } catch (e) {
                 showToast(e.message, 'error');
             }
+        }
+
+        // A levél megnyitása linkkel (mailto:, Gmail, Outlook a böngészőben), vagy a szövege a vágólapra
+        async function openFeedbackLink(via, prepared) {
+            if (via === 'copy') {
+                if (!await copyText(`Címzett: ${prepared.email}\nTárgy: ${prepared.subject}\n\n${prepared.body}`)) {
+                    throw new Error('Nem sikerült a vágólapra másolni a levelet.');
+                }
+                showFeedbackDone(`A levél szövege a vágólapon van: illeszd be egy új levélbe, címzett: ${prepared.email}`, '', prepared, false, false);
+                return;
+            }
+            const link = prepared.links[via];
+            // a vágólapra még a megnyitás előtt: utána már a levelező ablaka az aktív, és a másolás nem sikerülne
+            const copied = link.paste ? await copyText(link.paste) : false;
+            await api('open_url', { url: link.url });
+            let hint = '';
+            if (link.paste) {
+                const what = link.pasteKind === 'digest' ? 'A napló kivonata' : 'A levél szövege';
+                hint = copied
+                    ? `${what} nem fért bele a linkbe, ezért a vágólapra került: illeszd be a levélbe a jelölt helyre (Ctrl+V).`
+                    : `${what} nem fért bele a linkbe, és a vágólapra sem sikerült tenni: kattints a Szöveg másolása gombra, és illeszd be a levélbe.`;
+            }
+            const where = via === 'mail' ? 'a levelezőprogramodban' : 'a böngésződben';
+            showFeedbackDone(`A levél megnyílt ${where}: ellenőrizd, és küldd el!`, hint, prepared, true, via === 'mail');
+        }
+
+        function showFeedbackDone(title, hint, prepared, offerFile, fallback) {
+            document.getElementById('feedbackDoneTitle').textContent = title;
+            const hintEl = document.getElementById('feedbackDoneHint');
+            hintEl.textContent = hint;
+            hintEl.classList.toggle('hidden', !hint);
+            document.getElementById('feedbackFileName').textContent = prepared.fileName || '';
+            document.getElementById('feedbackAttachHint').classList.toggle('hidden', !(offerFile && prepared.file));
+            document.getElementById('feedbackFallbackHint').classList.toggle('hidden', !fallback);
+            document.getElementById('feedbackRevealBtn').classList.toggle('hidden', !prepared.file);
+            document.getElementById('feedbackDone').classList.remove('hidden');
+        }
+
+        // A levelezőprogram (MAPI) rejtett feladatának vége
+        function handleMailJob(job) {
+            const mail = feedback.mailJob;
+            if (isActiveJob(job)) return;
+            feedback.mailJob = null;
+            api('job_remove', { id: job.id }).catch(() => {});
+            if (job.state === 'stopped') return;
+            if (job.state === 'exited' && job.exitCode === 0) {
+                // az Outlook a küldésig nyitva tartja a hívást; ami azonnal visszatér, annál a levél még nyitva lehet
+                if (Date.now() - mail.started > 4000) showToast('Köszönjük a visszajelzést!', 'success');
+                return;
+            }
+            if (job.state === 'exited' && job.exitCode === 1) {
+                showToast('A levél küldés nélkül bezárult.', 'info');
+                return;
+            }
+            // nem sikerült: marad a mailto: link, a napló kivonata a levél szövegébe kerül
+            mail.prepared.mapi = null;
+            const reason = /^\[x\]/.test(job.message || '')
+                ? job.message.replace(/^\[x\]\s*/, '') + ' '
+                : 'A levelezőprogram nem tudta csatolni a naplót. ';
+            showToast(reason + 'Helyette a levél szövegébe kerül a napló kivonata.', 'info');
+            openFeedbackLink('mail', mail.prepared).catch(e => showToast(e.message, 'error'));
         }
 
         function revealFeedbackFile() {
             if (feedback.prepared && feedback.prepared.file) runAction('reveal_file', { file: feedback.prepared.file });
         }
 
+        /** Szöveg a vágólapra; visszaad: sikerült-e. */
         async function copyText(text) {
             try {
                 await navigator.clipboard.writeText(text);
+                return true;
             } catch (e) {
                 const textArea = document.createElement('textarea');
                 textArea.value = text;
@@ -1076,8 +1186,10 @@
                 textArea.style.opacity = '0';
                 document.body.appendChild(textArea);
                 textArea.select();
-                document.execCommand('copy');
+                let ok = false;
+                try { ok = document.execCommand('copy'); } catch (e2) {}
                 textArea.remove();
+                return ok;
             }
         }
 
@@ -1294,6 +1406,7 @@
             if (Term.open) {
                 if (!Term.active && Term.jobs.size) Term.active = [...Term.jobs.keys()].pop();
                 if (Term.active) termShow(Term.active);
+                pollSoon();   // a zárt panel alatt nem kértük le a kimenetet
             }
         }
 
@@ -1349,7 +1462,7 @@
             Term.removed.add(id);
             termDispose(id);
             renderTabs();
-            api('job_remove', { id }).then(() => fetchSites()).catch(e => showToast(e.message, 'error'));
+            api('job_remove', { id }).then(pollSoon).catch(e => showToast(e.message, 'error'));
         }
 
         function termStopActive() {
@@ -1412,16 +1525,18 @@
             if (job.kind === 'server') {
                 if (job.listening && !prev.listening) {
                     // csak a most induló szerverről szólunk (újratöltés után a régóta futókról nem)
-                    if (Date.now() / 1000 - (job.startedAt || 0) < 30) showToast(`${where}a szerver fut: http://127.0.0.1:${job.port}`, 'success');
-                    fetchSites();
+                    if (Date.now() / 1000 - (job.startedAt || 0) < 30) showToast(`${where}a szerver fut: ${job.url || 'http://127.0.0.1:' + job.port}`, 'success');
                 }
                 if (!isActiveJob(job) && isActiveJob(prev)) {
                     if (job.state === 'exited' || job.state === 'failed') showToast(`${where}a szerver leállt (kilépési kód: ${job.exitCode ?? '?'}).`, 'error');
-                    fetchSites();
                 }
             }
         }
 
+        // A feladatok lekérdezése csak akkor fut, ha van mit figyelni (szerver, telepítés, háttérfeladat), és a
+        // kimenetet csak akkor kéri, ha a Terminál panel nyitva van. Ha semmi sem fut, leáll; a következő művelet
+        // (szerver indítása, új projekt, a panel megnyitása) indítja újra. A beépített PHP szerver egyszerre csak
+        // egy kérést szolgál ki, ezért feleslegesen nem terheljük.
         const Poll = { timer: null, busy: false, failures: 0, again: false };
 
         function pollSoon() {
@@ -1430,16 +1545,34 @@
             Poll.timer = setTimeout(pollJobs, 50);
         }
 
+        /** A következő lekérdezésig hátralévő idő (ms), vagy null: nincs mit figyelni. */
+        function nextPollDelay() {
+            if (Poll.again) return 50;
+            if (Poll.failures) return 3000;
+            if (Term.wantFocus) return 300;
+            // telepítés, induló/leálló szerver, háttérfeladat, bezárt fül még futó folyamata
+            let busy = pendingThumbnails.size > 0 || feedback.mailJob !== null || Term.removed.size > 0
+                || sites.some(site => site.installing || site.serverState === 'starting' || site.serverState === 'stopping');
+            let servers = false;   // csak futó szerverek
+            for (const t of Term.jobs.values()) {
+                if (!isActiveJob(t.job)) continue;
+                if (t.job.kind === 'server' && t.job.state === 'running' && t.job.listening) servers = true;
+                else busy = true;
+            }
+            if (busy) return Term.open ? 1000 : 2000;
+            if (servers && !document.hidden) return Term.open ? 1000 : 5000;   // a leállásukat vesszük észre
+            return null;
+        }
+
         async function pollJobs() {
             if (Poll.busy || quitting) return;
             Poll.busy = true;
-            let active = pendingThumbnails.size > 0;
+            let gotOutput = false;
             try {
                 const offsets = {};
-                for (const [id, t] of Term.jobs) offsets[id] = t.offset;
+                if (Term.open) for (const [id, t] of Term.jobs) offsets[id] = t.offset;
                 if (Term.wantFocus && !Term.jobs.has(Term.wantFocus)) offsets[Term.wantFocus] = -1;
-                const checkPorts = [...Term.jobs.values()].some(t => t.job.kind === 'server' && t.job.state === 'running' && !t.job.listening);
-                const data = await api('jobs', { offsets, checkPorts });
+                const data = await api('jobs', { offsets });
                 Poll.failures = 0;
                 document.getElementById('overlay').classList.add('hidden');
                 setNotice(data.supervisor ? '' : 'A PocketWeb háttérfolyamata nem fut, ezért a szerverek és a telepítők nem indíthatók. Indítsd újra a PocketWebet!');
@@ -1447,24 +1580,27 @@
                 const seen = new Set();
                 for (const job of data.jobs) {
                     seen.add(job.id);
-                    if (job.hidden) { handleHiddenJob(job); if (isActiveJob(job)) active = true; continue; }
+                    if (job.hidden) { handleHiddenJob(job); continue; }
+                    if (job.kind === 'server') syncServerSite(job);
                     if (Term.removed.has(job.id)) continue;
                     const isNew = !Term.jobs.has(job.id);
                     const t = termEnsure(job);
                     const prev = t.job;
-                    if (!checkPorts || job.listening === undefined) job.listening = prev.listening;
                     t.job = job;
-                    if (job.output) t.term.write(base64ToBytes(job.output));
+                    if (job.output) { t.term.write(base64ToBytes(job.output)); gotOutput = true; }
                     if (typeof job.offset === 'number') t.offset = job.offset;
                     if (!isNew) onJobChange(prev, job);
                     // a záró sor csak akkor, ha már a teljes kimenetet kiírtuk
                     if (!isActiveJob(job) && typeof job.offset === 'number' && !job.output) termPrintEnd(t);
-                    if (isActiveJob(job) || job.output) active = true;
-                    if (isNew) Poll.again = true;   // az új feladat kimenetét azonnal lekérjük
+                    if (isNew && Term.open) Poll.again = true;   // az új feladat kimenetét azonnal lekérjük
                     if (Term.wantFocus === job.id) { Term.wantFocus = null; termShow(job.id); }
                 }
                 for (const id of [...Term.jobs.keys()]) if (!seen.has(id)) termDispose(id);
                 for (const id of [...Term.removed]) if (!seen.has(id)) Term.removed.delete(id);
+                // a már nem létező szerver feladatok kártyái
+                for (const site of sites) {
+                    if (site.serverJob && !seen.has(site.serverJob)) updateSite(site.name, { serverJob: null, serverState: 'stopped', isRunning: false, url: null });
+                }
                 if (!Term.active && Term.jobs.size) termShow([...Term.jobs.keys()].pop());
                 renderTabs();
             } catch (e) {
@@ -1473,14 +1609,18 @@
                 }
             } finally {
                 Poll.busy = false;
+                clearTimeout(Poll.timer);
+                Poll.timer = null;
                 if (!quitting) {
-                    clearTimeout(Poll.timer);
-                    const delay = Poll.again ? 50 : (Poll.failures ? 3000 : (active || Term.wantFocus ? 500 : 2000));
+                    const delay = gotOutput && Term.open ? 300 : nextPollDelay();   // a kimenet utolérése
                     Poll.again = false;
-                    Poll.timer = setTimeout(pollJobs, delay);
+                    if (delay !== null) Poll.timer = setTimeout(pollJobs, delay);
                 }
             }
         }
+
+        // a kis méretre tett / háttérbe került ablak visszatérésekor frissítünk
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) pollSoon(); });
 
         // Panel átméretezése a felső szélénél húzva
         (function () {
@@ -1537,10 +1677,8 @@
         (async function init() {
             if (localStorage.getItem('pw_term_open') === '1') termTogglePanel(true);
             await bootstrap();
-            fetchSites();
-            pollJobs();
-            // a máshonnan (pl. parancssorból) indított szerverek miatt időnként frissítjük a kártyákat
-            setInterval(() => { if (!document.hidden && !quitting) fetchSites(); }, 20000);
+            await fetchSites();
+            pollJobs();   // csak akkor folytatódik, ha fut valami
         })();
     </script>
 </body>

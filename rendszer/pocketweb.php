@@ -28,6 +28,8 @@ final class Supervisor
 {
     /** Minden feladat kapja: színes kimenet akkor is, ha nem terminálba ír. */
     const JOB_ENV = ['FORCE_COLOR' => '1', 'CLICOLOR_FORCE' => '1', 'COMPOSER_NO_INTERACTION' => '1', 'NO_COLOR' => null];
+    /** A vezérlőpult ablakának címe (index.html <title>) – ezt sosem hozzuk előre más helyett. */
+    const DASHBOARD_TITLE = 'PocketWeb Vezérlőpult';
 
     private $dashboard = null;       // a vezérlőpult webszerverének folyamata
     private $browserProc = null;     // a vezérlőpult ablak (ha a mi gyerekünk)
@@ -42,6 +44,7 @@ final class Supervisor
     private $dashboardRestarts = 0;
     private $token = '';
     private $url;
+    private $focusWatches = [];      // előtérbe hozandó ablakok: [hint, az indítás előtti ablakok, kezdés]
 
     public function __construct()
     {
@@ -150,6 +153,7 @@ final class Supervisor
         foreach (Jobs::all() as $job) {
             $status = $job['status'];
             if (!in_array($status['state'] ?? '', ['running', 'stopping'], true) || empty($status['pid'])) continue;
+            if ($job['kind'] === 'mail') continue;   // a visszajelzés levél ablaka lehet, hogy még nyitva van
             // csak akkor lőjük le, ha az a PID még mindig ugyanaz a program (a PID-ek újrahasznosulnak)
             $expected = strtolower(basename((string)($job['cmd'][0] ?? '')));
             if ($expected !== '' && Platform::processName((int)$status['pid']) === $expected) {
@@ -165,6 +169,7 @@ final class Supervisor
         }
         foreach (glob(pw_path(PW_RUN, 'queue', '*')) ?: [] as $file) @unlink($file);
         foreach (glob(pw_path(PW_RUN, 'terminal-*.command')) ?: [] as $file) @unlink($file);
+        foreach (glob(pw_path(PW_RUN, 'mail-*.json')) ?: [] as $file) @unlink($file);
         foreach (['heartbeat', 'bye', 'supervisor.alive'] as $name) @unlink(Runtime::file($name));
         if (@filesize(Runtime::file('pocketweb.log')) > 1048576) @unlink(Runtime::file('pocketweb.log'));
 
@@ -258,6 +263,7 @@ final class Supervisor
                 $this->handle($message);
             }
             $this->pollJobs();
+            $this->checkFocus();
 
             $now = microtime(true);
             if ($now - $lastAlive >= 2) {
@@ -286,10 +292,16 @@ final class Supervisor
                 break;
             case 'launch':
                 $spec = is_array($message['spec'] ?? null) ? $message['spec'] : [];
+                $watch = $this->watchFocus($spec['focus'] ?? null);
                 if (!Platform::launch($spec)) {
                     $what = $spec['cmdline'] ?? implode(' ', (array)($spec['argv'] ?? []));
                     $this->say('Nem sikerült elindítani: ' . $what);
+                } elseif ($watch) {
+                    $this->focusWatches[] = $watch;
                 }
+                break;
+            case 'focus':   // pl. a visszajelzés levelének ablaka (a feladatot az api.php indítja)
+                if ($watch = $this->watchFocus($message['focus'] ?? null)) $this->focusWatches[] = $watch;
                 break;
             case 'quit':
                 $this->requestStop('Kilépés a vezérlőpultról.');
@@ -366,6 +378,47 @@ final class Supervisor
         }
     }
 
+    // ------------------------------------------------------------------
+    // Az elindított programok ablakának előtérbe hozása (WinFocus.php)
+    // ------------------------------------------------------------------
+
+    /** Figyelés előkészítése: az indítás előtti ablakok. null, ha nincs teendő vagy nem lehetséges. */
+    private function watchFocus($hint): ?array
+    {
+        if (!is_array($hint) || !WinFocus::available()) return null;
+        WinFocus::forgetProcesses();
+        return ['hint' => $hint, 'before' => array_fill_keys(WinFocus::handles(), true), 'start' => microtime(true)];
+    }
+
+    private function checkFocus(): void
+    {
+        if (!$this->focusWatches) return;
+        foreach ($this->focusWatches as $i => $watch) {
+            // az alapértelmezett böngésző / levelezőprogram neve (az indítás után kérdezzük le, hogy ne késleltesse)
+            if (!empty($watch['hint']['handler']) && !isset($watch['hint']['exe'])) {
+                $exe = Platform::defaultHandlerExe((string)$watch['hint']['handler']);
+                if ($exe === null) {
+                    unset($this->focusWatches[$i]);
+                    continue;
+                }
+                $this->focusWatches[$i]['hint']['exe'] = $exe;
+            }
+        }
+        if (!$this->focusWatches) return;
+        $windows = WinFocus::windows();
+        $exclude = $this->browserProc ? [(int)proc_get_status($this->browserProc)['pid']] : [];
+        foreach ($this->focusWatches as $i => $watch) {
+            $age = microtime(true) - $watch['start'];
+            $id = WinFocus::pick($windows, $watch['before'], $watch['hint'], $age, $exclude, [self::DASHBOARD_TITLE]);
+            if ($id !== null) {
+                if (!WinFocus::activate($id)) $this->say('Nem sikerült előtérbe hozni az ablakot: ' . $windows[$id]['title']);
+                unset($this->focusWatches[$i]);
+            } elseif ($age > (float)($watch['hint']['timeout'] ?? 10)) {
+                unset($this->focusWatches[$i]);
+            }
+        }
+    }
+
     /** Ha a vezérlőpult szervere váratlanul leállna, újraindítjuk. */
     private function checkDashboard(): void
     {
@@ -431,6 +484,8 @@ final class Supervisor
 
         $pids = [];
         foreach ($this->jobs as $id => $job) {
+            // a visszajelzés levelét nem állítjuk le: a levelezőprogram ablaka nyitva marad, a feladat magától kilép
+            if ($job['spec']['kind'] === 'mail') continue;
             $pids[] = $job['pid'];
             Jobs::setState($id, ['state' => 'stopped', 'pid' => $job['pid'], 'startedAt' => $job['startedAt'], 'endedAt' => microtime(true)]);
         }
