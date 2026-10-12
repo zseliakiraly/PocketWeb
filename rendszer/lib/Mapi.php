@@ -42,7 +42,7 @@ class Mapi
         foreach (['HKCU\\Software\\Clients\\Mail\\', 'HKLM\\SOFTWARE\\Clients\\Mail\\'] as $root) {
             $dll = Platform::regValue($root . $name, 'DLLPathEx') ?? Platform::regValue($root . $name, 'DLLPath');
             if ($dll === null) continue;
-            $machine = self::peMachine(self::expandEnv($dll));
+            $machine = self::peMachine(trim(Platform::expandEnv($dll), '"'));
             if ($machine !== null && $machine !== self::phpMachine()) return null;
             break;
         }
@@ -85,13 +85,6 @@ class Mapi
         return PHP_INT_SIZE === 8 ? 0x8664 : 0x14c;
     }
 
-    private static function expandEnv(string $path): string
-    {
-        return trim(preg_replace_callback('/%([^%]+)%/', function ($m) {
-            $value = getenv($m[1]);
-            return $value !== false ? $value : $m[0];
-        }, $path), '"');
-    }
 
     // ------------------------------------------------------------------
     // A levél átadása a send-mail feladatnak

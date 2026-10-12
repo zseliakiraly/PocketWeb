@@ -304,6 +304,55 @@ class Platform
         ];
     }
 
+    /**
+     * URL vagy fájl megnyitása a választott böngészőben: default (a rendszer alapértelmezettje), chrome, firefox, edge.
+     * (A vezérlőpult a saját Edge ablakában fut, ettől függetlenül.)
+     * @return array|string launch spec vagy hibaüzenet
+     */
+    public static function browserSpec(string $browser, string $target)
+    {
+        if ($browser === '' || $browser === 'default') return self::openSpec($target);
+        $names = ['chrome' => 'A Google Chrome', 'firefox' => 'A Mozilla Firefox', 'edge' => 'A Microsoft Edge'];
+        if (!isset($names[$browser])) return 'Érvénytelen böngésző.';
+        if ($target === '' || strpbrk($target, "\"\r\n\0") !== false) throw new InvalidArgumentException('Érvénytelen cím.');
+        $exe = self::browserExe($browser);
+        if ($exe === null) return $names[$browser] . ' nem található ezen a gépen. A Beállításokban válassz másik böngészőt!';
+        // a böngésző az új lapot a legutóbb használt ablakában nyitja meg: ha nincs új ablak, azt hozzuk elő
+        return ['argv' => [$exe, $target], 'focus' => ['exe' => strtolower(basename($exe)), 'existingAfter' => 1.0, 'timeout' => 15]];
+    }
+
+    /** A böngésző programja: a szokásos telepítési helyek, majd a Windows "App Paths" bejegyzése. */
+    public static function browserExe(string $browser): ?string
+    {
+        $exe = ['chrome' => 'chrome.exe', 'firefox' => 'firefox.exe', 'edge' => 'msedge.exe'][$browser] ?? null;
+        if ($exe === null) return null;
+        $pf = (string)(getenv('ProgramFiles') ?: 'C:\\Program Files');
+        $pf86 = (string)(getenv('ProgramFiles(x86)') ?: 'C:\\Program Files (x86)');
+        $local = (string)(getenv('LOCALAPPDATA') ?: '');
+        $paths = [
+            'chrome' => [$pf . '\\Google\\Chrome\\Application\\chrome.exe', $pf86 . '\\Google\\Chrome\\Application\\chrome.exe', $local . '\\Google\\Chrome\\Application\\chrome.exe'],
+            'firefox' => [$pf . '\\Mozilla Firefox\\firefox.exe', $pf86 . '\\Mozilla Firefox\\firefox.exe', $local . '\\Mozilla Firefox\\firefox.exe'],
+            'edge' => [$pf86 . '\\Microsoft\\Edge\\Application\\msedge.exe', $pf . '\\Microsoft\\Edge\\Application\\msedge.exe'],
+        ][$browser];
+        foreach ($paths as $path) {
+            if (is_file($path)) return $path;
+        }
+        foreach (['HKCU', 'HKLM'] as $root) {
+            $path = self::regValue($root . '\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\' . $exe);
+            if ($path !== null && is_file($path = trim(self::expandEnv($path), '"'))) return $path;
+        }
+        return null;
+    }
+
+    /** %VÁLTOZÓ% hivatkozások kifejtése (a registry REG_EXPAND_SZ értékeiben). */
+    public static function expandEnv(string $text): string
+    {
+        return (string)preg_replace_callback('/%([^%]+)%/', function ($m) {
+            $value = getenv($m[1]);
+            return $value !== false ? $value : $m[0];
+        }, $text);
+    }
+
     /** Parancssor ablak a projekt mappájában; a PATH-ban a mellékelt php, composer, node és npm. */
     public static function terminalSpec(string $dir, string $title): array
     {
@@ -311,10 +360,11 @@ class Platform
     }
 
     /**
-     * A kiválasztott szerkesztő elindítása a projekt mappájával.
+     * A kiválasztott szerkesztő elindítása a projekt mappájával; ha $file is meg van adva, az a $line. sornál nyílik meg
+     * (a Terminál panelen a hiba helyére kattintva).
      * @return array|string launch spec vagy hibaüzenet
      */
-    public static function editorSpec(string $editor, string $dir)
+    public static function editorSpec(string $editor, string $dir, ?string $file = null, ?int $line = null)
     {
         $names = ['vscode' => 'VS Code', 'sublime' => 'Sublime Text', 'notepadpp' => 'Notepad++', 'phpstorm' => 'PhpStorm', 'webstorm' => 'WebStorm'];
         if (!isset($names[$editor])) return 'Érvénytelen szerkesztő.';
@@ -357,6 +407,17 @@ class Platform
         if (!$exe) return $names[$editor] . ' nem található ezen a gépen.';
 
         $argv = array_merge([$exe], $args, [$dir]);
+        if ($file !== null) {
+            $line = max(1, (int)$line);
+            $target = [
+                'vscode' => [$dir, '-g', $file . ':' . $line],
+                'sublime' => [$dir, $file . ':' . $line],
+                'notepadpp' => ['-n' . $line, $file],
+                'phpstorm' => [$dir, '--line', (string)$line, $file],
+                'webstorm' => [$dir, '--line', (string)$line, $file],
+            ][$editor];
+            $argv = array_merge([$exe], $target);
+        }
         $env = self::childEnv();   // így a szerkesztő termináljában is elérhető a php, composer, node
         // a szerkesztők a projekt mappájának nevét írják a címsorba (a Notepad++ a fájlét)
         $focus = ['exe' => $windowExe, 'title' => $editor === 'notepadpp' ? null : basename($dir),

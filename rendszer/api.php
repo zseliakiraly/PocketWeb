@@ -267,7 +267,9 @@ if ($action === 'jobs') {
             $item['output'] = base64_encode($chunk['data']);
             $item['offset'] = $chunk['offset'];
         }
-        if ($item['hidden'] && !Jobs::isActive($job)) {
+        // a rejtett feladatok, és a hibával leállt szerverek / telepítők utolsó sora (az értesítéshez)
+        $failed = in_array($job['kind'], ['server', 'install'], true) && ($status['exitCode'] ?? 0) !== 0;
+        if (!Jobs::isActive($job) && ($item['hidden'] || $failed)) {
             $item['message'] = Jobs::lastLine($id);
         }
         $list[] = $item;
@@ -309,25 +311,29 @@ if ($action === 'open_terminal') {
     launch(Platform::terminalSpec($dir, 'PocketWeb - ' . $name));
 }
 
+// Megnyitás böngészőben – a Beállításokban választott böngészőben (alapból a rendszer alapértelmezettjében)
 if ($action === 'open_browser') {
     [$name, $dir] = require_site();
+    $browser = (string)input('browser', 'default');
     if (input('mode') === 'local') {
         // a fájlt magát nyitjuk meg (mint dupla kattintásra): így az ékezetes mappanév sem gond
         $index = pw_path($dir, 'index.html');
-        launch(is_file($index) ? Platform::openSpec($index) : Platform::openFolderSpec($dir));
+        launch(is_file($index) ? Platform::browserSpec($browser, $index) : Platform::openFolderSpec($dir));
     }
     $type = Sites::type($dir);
     if (!Sites::needsServer($type)) fail('Ennek a projektnek nincs szervere.');
     $url = null;
     foreach (site_jobs($name, 'server') as $job) $url = Jobs::serverUrl($job['id']);   // a szerver valódi címe
-    launch(Platform::openSpec($url ?? 'http://' . PW_HOST . ':' . Sites::port($dir) . '/'));
+    launch(Platform::browserSpec($browser, $url ?? 'http://' . PW_HOST . ':' . Sites::port($dir) . '/'));
 }
 
 // A Terminál panelen kattintott linkek és a visszajelzés levele (mailto:, Gmail, Outlook)
 if ($action === 'open_url') {
     $url = (string)input('url', '');
     if (strlen($url) > 8192 || !preg_match('#^(https?://|mailto:)[^\s"<>\x00-\x1f]+$#i', $url)) fail('Érvénytelen cím.');
-    launch(Platform::openSpec($url));
+    // a projektek helyi címei (a Terminál panel linkjei) a választott böngészőben, minden más az alapértelmezettben
+    $local = preg_match('#^https?://(127\.0\.0\.1|localhost)(:\d+)?(/|$)#i', $url) === 1;
+    launch($local ? Platform::browserSpec((string)input('browser', 'default'), $url) : Platform::openSpec($url));
 }
 
 // Névjegy ablak: verziók
@@ -405,9 +411,24 @@ if ($action === 'reveal_file') {
     launch(Platform::revealFileSpec((string)realpath($file)));
 }
 
+// A projekt megnyitása a szerkesztőben; a Terminál panel hibahelyére kattintva a fájl a hibás sornál nyílik meg
 if ($action === 'open_editor') {
     [$name, $dir] = require_site();
-    launch(Platform::editorSpec((string)input('editor', 'vscode'), $dir));
+    $file = null;
+    $line = null;
+    if ((string)input('file', '') !== '') {
+        $path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)input('file'));
+        if (!preg_match('#^([A-Za-z]:)?[\\\\/]#', $path)) $path = pw_path($dir, $path);   // a projekthez viszonyított út
+        $real = realpath($path);
+        $base = realpath($dir);
+        if ($real === false || !is_file($real) || $base === false
+            || strncasecmp($real, $base . DIRECTORY_SEPARATOR, strlen($base) + 1) !== 0) {
+            fail('A fájl nem található a projektben: ' . (string)input('file'), 404);
+        }
+        $file = $real;
+        $line = max(1, min(1000000, (int)input('line', 1)));
+    }
+    launch(Platform::editorSpec((string)input('editor', 'vscode'), $dir, $file, $line));
 }
 
 if ($action === 'toggle_serve') {
@@ -440,7 +461,8 @@ if ($action === 'toggle_serve') {
         }
     }
     if ($type === 'laravel') {
-        $cmd = [Platform::php(), 'artisan', 'serve', '--host=' . PW_HOST, '--port=' . $port, '--ansi'];
+        // a tasks\serve.php indítja a "php artisan serve"-t, és kiírja, hol van a hiba (szintaxis, Laravel napló)
+        $cmd = [Platform::php(), pw_path(PW_SYS, 'tasks', 'serve.php'), $name, (string)$port];
         $display = 'php artisan serve --port=' . $port;
     } else {
         $cmd = [Platform::php(), '-S', PW_HOST . ':' . $port];

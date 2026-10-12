@@ -16,6 +16,8 @@ Mellékelt eszközök: php, node.js, Composer és Adminer
 - A Vezérlőpult internet nélkül is működik (helyi Tailwind), a szerkesztőket (VS Code, PhpStorm…) a szokásos telepítési helyeken is megkeresi.
 - Biztonság: más weboldalak nem tudnak a háttérben projekteket törölni vagy programot indítani a gépeden.
 - Kíméletes a géppel: a Vezérlőpult csak akkor kérdezi le a háttérfolyamatokat, ha fut valami (szerver, telepítés), és a projektek listáját csak induláskor, a Frissítés gombra és egy új projekt elkészülésekor tölti újra.
+- **Hol a hiba?** Ha egy Laravel projektben szintaxishiba van, vagy egy oldal hibát dob, a Terminál panel megmutatja a fájlt, a sort és a kódrészletet; a hiba helyére kattintva a szerkesztő a hibás sornál nyílik meg.
+- **Választható böngésző** a projektekhez (rendszer alapértelmezett, Chrome, Firefox, Edge); a Vezérlőpult továbbra is a saját Edge ablakában fut.
 
 ## Indítás és használat
 
@@ -47,7 +49,7 @@ Parancssor: külön parancssor ablakot nyit a projekt mappájában (a php, compo
 
 Megnyitás szerkesztőben: a projektet megnyitja a beállításokban kiválasztott programban (VS Code az alapértelmezett).
 
-Megnyitás böngészőben: megnyitja az elkészült weboldalt az alapértelmezett böngészőben (statikus fájloknál az index.html-t, PHP/Laravel esetén a szerver címét, ha fut a szerver).
+Megnyitás böngészőben: megnyitja az elkészült weboldalt a beállításokban választott böngészőben (statikus fájloknál az index.html-t, PHP/Laravel esetén a szerver címét, ha fut a szerver).
 
 Adatbázis megnyitása: külön ablakban paraméterezve megnyitja az Adminer felületét. A jelszót a Vezérlőpultból tudod kimásolni.
 
@@ -65,7 +67,9 @@ A Vezérlőpult alján, a VS Code termináljához hasonló panel, ami a háttér
 - A panel magassága a felső szélénél húzva állítható.
 - Gombok: folyamat leállítása, kimenet törlése, teljes méret, panel elrejtése.
 - A fül bezárása (×) a még futó folyamatot leállítja.
-- A kimenetben lévő linkekre (pl. `http://127.0.0.1:8000`) kattintva a weboldal a böngészőben nyílik meg.
+- A kimenetben lévő linkekre (pl. `http://127.0.0.1:8000`) kattintva a weboldal a választott böngészőben nyílik meg.
+
+**Hibakeresés (Laravel):** a szerver indításakor a PocketWeb gyorsan átnézi a projekt PHP fájljait (app, bootstrap, config, database, routes…), és ha valamelyikben szintaxishiba van, kiírja a fájlt, a sort és a hibás kódrészletet. Ha a szerver emiatt nem indul el, a kártyán „Hibával leállt” jelzés és értesítés jelenik meg az okkal. Futás közben a Laravel naplójába kerülő hibák (pl. egy kontrollerben vagy nézetben) is megjelennek a panelen, a helyükkel együtt – nem csak a böngészőben. A hiba helyére (pl. `routes\web.php, 8. sor`) kattintva a fájl a kiválasztott szerkesztőben, a hibás sornál nyílik meg.
 ___________________________
 4. Adatbázis kezelése
 
@@ -83,11 +87,13 @@ Wordpress adatbázis helye: ...\PocketWeb\projektek\WpProjekted\wp-content\datab
 ___________________________
 5. Beállítások
 
-A beállításokban három dolgot lehet csinálni:
+A beállításokban négy dolgot lehet csinálni:
 
 - Kiválasztani a témaszínt a default narancs helyett.
 
 - Kiválasztani a külső szerkesztőt (VS Code, Sublime Text, Notepad++, PhpStorm, WebStorm). A PocketWeb a szokásos telepítési helyeken és a PATH-ban is keresi őket.
+
+- Kiválasztani a böngészőt, amelyben a projektek (és a Terminál panel helyi linkjei) megnyílnak: a rendszer alapértelmezettje, Google Chrome, Mozilla Firefox vagy Microsoft Edge. A Vezérlőpult ettől függetlenül mindig a saját Edge ablakában fut.
 
 - Linkek a csomagolt php, nodejs, composer és adminer letöltőoldalaihoz.
 ___________________________
@@ -119,4 +125,5 @@ A levelet mindig te küldöd el, a saját fiókodból: a PocketWeb semmit nem k�
 - A Vezérlőpult (`rendszer\index.html`) az `api.php`-n keresztül kéri a feladatokat; az `api.php` ezeket üzenetsoron (`rendszer\.run\queue`) adja át a felügyelőnek, a kimenetük pedig a `rendszer\.run\jobs\` alatti naplófájlokból jut el a Terminál panelre. A beépített PHP szerver egyszerre csak egy kérést szolgál ki, ezért a Vezérlőpult csak akkor kérdez le, ha fut valami.
 - A programokat (Intéző, böngésző, szerkesztő) a felügyelő indítja; mivel háttérfolyamat, a Windows nem engedné az ablakukat előtérbe hozni. Ezért a felügyelő megkeresi az új ablakot, és a user32.dll-lel (PHP FFI) előre hozza (`rendszer\lib\WinFocus.php`). URL-t és fájlt a `start` paranccsal nyit meg.
 - A visszajelzés napló csatolása a Windows Simple MAPI felületével történik (`rendszer\lib\Mapi.php`, `rendszer\tasks\send-mail.php`), ugyanígy, ahogy az Intéző „Küldés → Levél címzettje” parancsa.
+- A Laravel szervert a `rendszer\tasks\serve.php` indítja (`php artisan serve`): előtte szintaxis-ellenőrzés, közben a `storage\logs` figyelése (`rendszer\lib\CodeCheck.php`).
 - Közös kód: `rendszer\lib\` (a Windows-műveletek: `Platform.php`, visszajelzés: `Feedback.php`), telepítők: `rendszer\tasks\`, terminál megjelenítő: `rendszer\vendor\xterm` (xterm.js, MIT licenc).

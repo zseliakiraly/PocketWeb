@@ -329,6 +329,21 @@
                         </div>
                     </div>
 
+                    <!-- böngésző -->
+                    <div class="bg-gray-850 p-4 rounded-sm border border-gray-800">
+                        <label class="block text-sm font-medium text-gray-300 mb-3">Böngésző</label>
+                        <p class="text-xs text-gray-500 mb-4">Ebben nyílnak meg a projektek (Megnyitás böngészőben) és a Terminál panel helyi linkjei. A Vezérlőpult ettől függetlenül a saját Edge ablakában fut.</p>
+
+                        <div class="flex items-center gap-4">
+                            <select id="browserSelect" onchange="saveBrowserPreference()" class="ml-auto bg-gray-100 border border-gray-200 text-gray-700 text-sm rounded-sm focus:ring-blue-500 focus:border-blue-500 block px-2 py-2 shadow-sm">
+                                <option value="default">Rendszer alapértelmezett</option>
+                                <option value="chrome">Google Chrome</option>
+                                <option value="firefox">Mozilla Firefox</option>
+                                <option value="edge">Microsoft Edge</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <!-- Letöltések -->
                     <div class="bg-gray-850 p-4 rounded-sm border border-gray-800">
                         <label class="block text-sm font-medium text-gray-300 mb-3">Hivatalos szoftverek letöltése</label>
@@ -650,7 +665,9 @@
                     url: job.url || null
                 });
             } else if (site.serverJob === job.id) {
-                updateSite(job.site, { serverJob: null, serverState: 'stopped', isRunning: false, url: null });
+                // hibánál a kártya jelvénye a kimenetre visz (ott látszik, hol a hiba)
+                const failed = job.state === 'failed' || (job.state === 'exited' && job.exitCode !== 0);
+                updateSite(job.site, { serverJob: failed ? job.id : null, serverState: failed ? 'error' : 'stopped', isRunning: false, url: null });
             }
         }
 
@@ -725,7 +742,8 @@
                         external: { dot: 'bg-green-500', text: `Fut (:${site.port}), máshonnan indítva` },
                         starting: { dot: 'bg-yellow-400 animate-pulse', text: 'Szerver indul...' },
                         stopping: { dot: 'bg-yellow-400 animate-pulse', text: 'Szerver leáll...' },
-                        stopped:  { dot: 'bg-gray-500', text: 'Leállítva' }
+                        stopped:  { dot: 'bg-gray-500', text: 'Leállítva' },
+                        error:    { dot: 'bg-red-500', text: 'Hibával leállt – részletek' }
                     }[site.serverState];
                     if (badge) badge.job = site.serverJob;
                 }
@@ -913,10 +931,11 @@
 
         function openFolder(siteName) { runAction('open_folder', { site: siteName }); }
         function openTerminal(siteName) { runAction('open_terminal', { site: siteName }); }
-        function openUrl(url) { runAction('open_url', { url }); }
+        // a helyi címeket (127.0.0.1, localhost) az api.php a Beállításokban választott böngészőben nyitja meg
+        function openUrl(url) { runAction('open_url', { url, browser: preferredBrowser() }); }
 
         function openBrowser(site) {
-            runAction('open_browser', { site: site.name, mode: site.needsServer ? 'server' : 'local' });
+            runAction('open_browser', { site: site.name, mode: site.needsServer ? 'server' : 'local', browser: preferredBrowser() });
         }
 
         async function toggleServe(siteName) {
@@ -1284,14 +1303,23 @@
             document.getElementById('overlay').classList.remove('hidden');
         }
 
-        // Betöltéskor beállítjuk a korábban mentett szerkesztőt (ha van)
+        // Betöltéskor beállítjuk a korábban mentett szerkesztőt és böngészőt (ha van)
         document.addEventListener('DOMContentLoaded', () => {
-            const savedEditor = localStorage.getItem('preferredEditor');
-            const select = document.getElementById('editorSelect');
-            if (savedEditor && select.querySelector(`option[value="${savedEditor}"]`)) {
-                select.value = savedEditor;
+            for (const [key, id] of [['preferredEditor', 'editorSelect'], ['preferredBrowser', 'browserSelect']]) {
+                const saved = localStorage.getItem(key);
+                const select = document.getElementById(id);
+                if (saved && select.querySelector(`option[value="${saved}"]`)) select.value = saved;
             }
         });
+
+        function preferredBrowser() {
+            return document.getElementById('browserSelect').value || 'default';
+        }
+
+        function saveBrowserPreference() {
+            localStorage.setItem('preferredBrowser', preferredBrowser());
+            showToast('Böngésző mentve!', 'success');
+        }
 
         // Amikor a felhasználó átállítja a legördülő menüt, elmentjük
         function saveEditorPreference() {
@@ -1373,10 +1401,44 @@
             const fit = new FitAddon.FitAddon();
             term.loadAddon(fit);
             term.loadAddon(new WebLinksAddon.WebLinksAddon((event, uri) => { event.preventDefault(); openUrl(uri); }));
+            term.registerLinkProvider(errorLinkProvider(term, () => t.job));
             t = { job, term, fit, el, offset: -1, opened: false, ended: false };
             Term.jobs.set(job.id, t);
             if (job.command) term.write(`\x1b[90m$ ${job.command}\x1b[0m\r\n`);
             return t;
+        }
+
+        // A kimenetben a hibák helye ("routes\\web.php, 8. sor", "at routes/web.php:8", "in C:\\...\\index.php on line 8")
+        // kattintható: a fájl a kiválasztott szerkesztőben, a hibás sornál nyílik meg
+        const ERROR_LOCATION = /(?: – |\(|\bat |\bin )((?:[A-Za-z]:)?[^\s():,"'][^():,"']*?\.php)(?:, (\d+)\. sor|:(\d+)| on line (\d+))/g;
+        function errorLinkProvider(term, getJob) {
+            return {
+                provideLinks(y, callback) {
+                    const row = term.buffer.active.getLine(y - 1);
+                    const job = getJob();
+                    if (!row || !job || !job.site) return callback(undefined);
+                    const text = row.translateToString(true);
+                    const links = [];
+                    for (const m of text.matchAll(ERROR_LOCATION)) {
+                        const file = m[1].trim();
+                        const line = parseInt(m[2] || m[3] || m[4], 10);
+                        const start = m.index + m[0].indexOf(m[1]) + 1;
+                        const end = m.index + m[0].length;
+                        links.push({
+                            range: { start: { x: start, y }, end: { x: end, y } },
+                            text: m[0],
+                            decorations: { pointerCursor: true, underline: true },
+                            activate: () => openInEditorAt(job.site, file, line)
+                        });
+                    }
+                    callback(links.length ? links : undefined);
+                }
+            };
+        }
+
+        function openInEditorAt(siteName, file, line) {
+            const editor = document.getElementById('editorSelect').value || 'vscode';
+            runAction('open_editor', { site: siteName, editor, file, line }, `Megnyitva a szerkesztőben: ${file}, ${line}. sor`);
         }
 
         function termDispose(id) {
@@ -1526,9 +1588,10 @@
         // Állapotváltozások: értesítések és a kártyák frissítése
         function onJobChange(prev, job) {
             const where = job.site ? `${job.site}: ` : '';
+            const reason = (job.message || '').replace(/^\[[x!]\]\s*/, '');
             if (job.kind === 'install' && !isActiveJob(job) && isActiveJob(prev)) {
                 if (job.state === 'exited' && job.exitCode === 0) showToast(`${where}a telepítés elkészült!`, 'success');
-                else if (job.state !== 'stopped') showToast(`${where}a telepítés nem sikerült – részletek a Terminál panelen.`, 'error');
+                else if (job.state !== 'stopped') showToast(`${where}${reason || 'a telepítés nem sikerült'} – részletek a Terminál panelen.`, 'error');
                 fetchSites();
             }
             if (job.kind === 'server') {
@@ -1536,8 +1599,8 @@
                     // csak a most induló szerverről szólunk (újratöltés után a régóta futókról nem)
                     if (Date.now() / 1000 - (job.startedAt || 0) < 30) showToast(`${where}a szerver fut: ${job.url || 'http://127.0.0.1:' + job.port}`, 'success');
                 }
-                if (!isActiveJob(job) && isActiveJob(prev)) {
-                    if (job.state === 'exited' || job.state === 'failed') showToast(`${where}a szerver leállt (kilépési kód: ${job.exitCode ?? '?'}).`, 'error');
+                if (!isActiveJob(job) && isActiveJob(prev) && (job.state === 'failed' || (job.state === 'exited' && job.exitCode !== 0))) {
+                    showToast(`${where}${reason || `a szerver leállt (kilépési kód: ${job.exitCode ?? '?'})`} – részletek a Terminál panelen.`, 'error');
                 }
             }
         }
@@ -1599,6 +1662,7 @@
                     if (job.output) { t.term.write(base64ToBytes(job.output)); gotOutput = true; }
                     if (typeof job.offset === 'number') t.offset = job.offset;
                     if (!isNew) onJobChange(prev, job);
+                    else if (!isActiveJob(job) && Date.now() / 1000 - job.created < 60) onJobChange({ ...job, state: 'running', listening: false }, job);
                     // a záró sor csak akkor, ha már a teljes kimenetet kiírtuk
                     if (!isActiveJob(job) && typeof job.offset === 'number' && !job.output) termPrintEnd(t);
                     if (isNew && Term.open) Poll.again = true;   // az új feladat kimenetét azonnal lekérjük
