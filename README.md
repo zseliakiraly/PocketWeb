@@ -112,21 +112,15 @@ A levelet mindig te küldöd el, a saját fiókodból: a PocketWeb semmit nem k�
 
 ## VS Code és a mellékelt PHP
 
-A PocketWeb a saját, hordozható PHP-ját (`rendszer\php\php.exe`), Composerét és Node.js-ét használja, a gépre nem kell PHP-t telepíteni. A VS Code-nak viszont tudnia kell, hol van ez a PHP, különben:
+A PocketWeb a saját, hordozható PHP-ját (`rendszer\php\php.exe`), Composerét és Node.js-ét használja, a gépre nem kell PHP-t telepíteni. Ahhoz, hogy a VS Code is ezeket használja, **mindig a PocketWebből nyisd meg a projektet**: a kártya **Megnyitás szerkesztőben** gombjával.
 
-- nem működik a beépített PHP-ellenőrzés (a VS Code jobb alsó sarkában: *„Cannot validate since a PHP installation could not be found. Use the setting 'php.validate.executablePath'…”*);
-- a VS Code termináljában a `php`, `composer`, `npm` parancs nem található, vagy a gépen lévő másik PHP indul el (pl. a XAMPP-é);
-- a Laravel bővítmény nem tud artisan parancsokat futtatni.
-
-### 1. A legegyszerűbb: nyisd meg a projektet a PocketWebből
-
-A kártya **Megnyitás szerkesztőben** gombja úgy indítja el a VS Code-ot, hogy a keresési útvonal (PATH) elején a PocketWeb mappái vannak: `rendszer\bin` (composer), `rendszer\php` és `rendszer\node`. Így beállítás nélkül működik:
+Ez a gomb úgy indítja el a VS Code-ot, hogy a keresési útvonal (PATH) elején a PocketWeb mappái vannak: `rendszer\bin` (composer), `rendszer\php` és `rendszer\node`. Így semmit nem kell beállítani, és működik:
 
 - a PHP szintaxis-ellenőrzés (a hibák pirossal aláhúzva és a Problems / Problémák panelen);
 - a VS Code termináljában a `php`, `php artisan …`, `composer`, `node` és `npm` parancs;
 - a Laravel bővítmény (a `php` parancsot keresi).
 
-Ha a VS Code már nyitva volt (pl. a Start menüből indítottad), a korábban megnyitott ablakok a régi beállításokkal futnak tovább: zárd be teljesen a VS Code-ot, és a PocketWebből nyisd meg újra a projektet.
+Ha a VS Code-ot máshonnan indítod (Start menü, asztali ikon, „Open with Code”), nem tudja, hol van a PocketWeb PHP-ja: ilyenkor a jobb alsó sarokban a *„Cannot validate since a PHP installation could not be found…”* üzenet jelenik meg, a terminálban pedig a `php` parancs nem található (vagy a gépen lévő másik PHP indul el, pl. a XAMPP-é). Ha a projekt már nyitva volt így, zárd be teljesen a VS Code-ot, és nyisd meg újra a PocketWebből.
 
 **Ellenőrzés:** nyiss új terminált a VS Code-ban (Terminal → New Terminal), és írd be:
 
@@ -137,52 +131,10 @@ php -v
 
 A `where.exe php` első sora a PocketWeb PHP-ja legyen (`…\PocketWeb\rendszer\php\php.exe`). (PowerShellben a sima `where` mást jelent, ezért kell a `.exe`.)
 
-### 2. Beállítás a projektben (.vscode\settings.json)
-
-Ha a VS Code-ot nem a PocketWebből indítod (Start menü, asztali ikon, „Open with Code”), a projekt saját beállításaiban add meg a PHP helyét. A VS Code-ban nyisd meg a **projekt mappáját** (File → Open Folder… → `projektek\<projekted>`), majd **Ctrl+Shift+P** → *Preferences: Open Workspace Settings (JSON)*, és másold be (ez a projekt mappájában létrehozza a `.vscode\settings.json` fájlt):
-
-```jsonc
-{
-    // PHP szintaxis-ellenőrzés a mellékelt PHP-val (a projekt mappájához képest)
-    "php.validate.executablePath": "../../rendszer/php/php.exe",
-
-    // a terminálban is a PocketWeb php, composer, node és npm parancsa legyen elöl
-    "terminal.integrated.env.windows": {
-        "PATH": "${workspaceFolder}\\..\\..\\rendszer\\bin;${workspaceFolder}\\..\\..\\rendszer\\php;${workspaceFolder}\\..\\..\\rendszer\\node;${env:PATH}"
-    },
-
-    // Parancssor (cmd) a PowerShell helyett: abban az npm-et nem tiltja le a Windows
-    "terminal.integrated.defaultProfile.windows": "Command Prompt"
-}
-```
-
-Tudnivalók:
-
-- Az útvonalak **relatívak**: a projekt a `PocketWeb\projektek\<projekted>` mappában van, innen a `..\..` a PocketWeb mappa. Így a beállítás akkor is jó marad, ha a pendrive egy másik gépen más betűjelet kap (pl. `E:` helyett `F:`), vagy a PocketWeb mappát máshova másolod. Ezért ne írj ide teljes útvonalat (`S:\…`).
-- Csak akkor működik, ha a VS Code-ban magát a projekt mappáját nyitod meg – a `projektek` mappánál vagy a projekt egy almappájánál a `..\..` máshova mutat.
-- A mappát **megbízhatónak** kell jelölni: megnyitáskor a VS Code megkérdezi, hogy megbízol-e a mappa fájljainak szerzőiben (*Do you trust the authors of the files in this folder?*) → *Yes, I trust the authors*. Korlátozott módban (Restricted Mode) a VS Code nem veszi figyelembe ezeket a beállításokat.
-- A beállítás az új terminálokra vonatkozik: a már nyitott terminált zárd be (kuka ikon), és nyiss újat.
-- A **Laravel bővítményre** ez nem hat: az nem a terminál beállításait, hanem a VS Code indításakori PATH-t használja. Ha szükséged van rá, nyisd meg a projektet a PocketWebből (1. módszer).
-
-### 3. Felhasználói beállítás – csak ha a PocketWeb mindig ugyanott van
-
-Ha a PocketWeb nem pendrive-on, hanem fix helyen van (pl. `C:\PocketWeb`), az összes projektre egyszerre is beállíthatod: **Ctrl+Shift+P** → *Preferences: Open User Settings (JSON)*, és a meglévő beállítások mellé (a `{ }` közé) írd be:
-
-```jsonc
-    "php.validate.executablePath": "C:\\PocketWeb\\rendszer\\php\\php.exe",
-    "terminal.integrated.env.windows": {
-        "PATH": "C:\\PocketWeb\\rendszer\\bin;C:\\PocketWeb\\rendszer\\php;C:\\PocketWeb\\rendszer\\node;${env:PATH}"
-    },
-    "Laravel.phpCommand": ["C:\\PocketWeb\\rendszer\\php\\php.exe"],
-```
-
-(A `C:\\PocketWeb` helyére a saját útvonalad kerüljön, a JSON miatt dupla `\\` jelekkel.) Pendrive-on ezt ne használd: ha a meghajtó más betűjelet kap, az útvonal érvénytelen lesz – ott a 2. módszer relatív útvonalai a jók.
-
-### Tippek
+**Tippek:**
 
 - **PowerShell és npm:** ha a VS Code termináljában az `npm` parancsra *„…npm.ps1 cannot be loaded because running scripts is disabled on this system”* hibát kapsz, a Windows a PowerShell-szkripteket tiltja. Válts Parancssorra (a terminál **+** gombja melletti nyíl → *Command Prompt*), vagy írd az `npm` helyett: `npm.cmd`.
 - **Intelephense** (népszerű PHP bővítmény): PHP-t nem igényel, de érdemes megadni neki a mellékelt PHP verzióját (a Névjegy ablakban látható), hogy aszerint ellenőrizze a kódot, pl. `"intelephense.environment.phpVersion": "8.4.0"`.
-- Ha a gépen másik PHP is van (pl. XAMPP), a fenti módszerekkel a PocketWebé kerül előre; hogy melyik indul, a `where.exe php` első sora mutatja.
 
 ## Hibaelhárítás
 
