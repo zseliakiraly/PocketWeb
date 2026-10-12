@@ -1,3 +1,9 @@
 https://www.php.net/downloads.php?os=windows
 
-Töltd le a kívánt php verziót ZIP formátumban és a tartalmát másold a PHP mappába! Ne legyen verziószámos (php-8.4) almappa benne!
+Töltsd le a kívánt PHP verziót ZIP formátumban (x64, Non Thread Safe), és a tartalmát másold a php mappába!
+Ne legyen verziószámos (php-8.4) almappa benne: a php.exe közvetlenül a rendszer\php mappában legyen.
+
+A mellékelt php.ini-t és composer.phar-t hagyd meg: a php.ini kapcsolja be a Laravelhez és a WordPresshez
+szükséges kiterjesztéseket (curl, fileinfo, mbstring, openssl, pdo_sqlite, sqlite3, zip).
+Az ext mappát hagyd teljesen (benne a php_ffi.dll-t is): ezzel hozza előtérbe a PocketWeb az általa megnyitott
+ablakokat, és ezzel csatolja a naplót a visszajelzés leveléhez.

@@ -1,0 +1,497 @@
+<?php
+/*
+ * PocketWeb – a Windowstól függő műveletek egy helyen (Windows 10/11).
+ *
+ * A PocketWeb a rendszer\php és rendszer\node mappába mellékelt programokat használja
+ * (php.exe, node.exe – ezek a GitHubon nincsenek fent, a kész csomagban vannak benne).
+ *
+ * Fontos Windows-sajátosság: a proc_open() minden örökölhető handle-t továbbad a gyereknek,
+ * a beépített PHP szerver socketjeit is. Ezért hosszan futó programot (szervert, szerkesztőt,
+ * parancssor ablakot) soha nem az api.php indít, hanem a felügyelő (pocketweb.php) – az api.php
+ * csak a "launch spec"-et állítja össze és üzenetsoron átküldi.
+ */
+class Platform
+{
+    // ------------------------------------------------------------------
+    // Mellékelt programok (php, node, composer)
+    // ------------------------------------------------------------------
+
+    /** Az éppen futó PHP (rendszer\php\php.exe) – a felügyelő, a vezérlőpult és a feladatok is ezt használják. */
+    public static function php(): string
+    {
+        return PHP_BINARY;
+    }
+
+    public static function composerPhar(): string
+    {
+        return pw_path(PW_SYS, 'php', 'composer.phar');
+    }
+
+    /** A mellékelt Node.js (rendszer\node\node.exe), ha be van másolva. */
+    public static function node(): ?string
+    {
+        $node = pw_path(PW_SYS, 'node', 'node.exe');
+        return is_file($node) ? $node : null;
+    }
+
+    public static function home(): string
+    {
+        return (string)(getenv('USERPROFILE') ?: '');
+    }
+
+    /** Program keresése a PATH-ban (mint a "where" parancs). */
+    public static function which(string $name): ?string
+    {
+        // a kiterjesztés nélküli fájl (pl. a VS Code "code" bash szkriptje) Windowson nem futtatható
+        $exts = pathinfo($name, PATHINFO_EXTENSION) === ''
+            ? explode(';', strtolower((string)(getenv('PATHEXT') ?: '.com;.exe;.bat;.cmd')))
+            : [''];
+        foreach (explode(PATH_SEPARATOR, (string)getenv('PATH')) as $dir) {
+            $dir = trim($dir, " \"");
+            if ($dir === '') continue;
+            foreach ($exts as $ext) {
+                $file = $dir . DIRECTORY_SEPARATOR . $name . $ext;
+                if (is_file($file)) return $file;
+            }
+        }
+        return null;
+    }
+
+    /** Egy registry érték ($name === '': a kulcs alapértelmezett értéke), vagy null, ha nincs. */
+    public static function regValue(string $key, string $name = ''): ?string
+    {
+        $value = $name === '' ? ' /ve' : ' /v ' . escapeshellarg($name);
+        return self::parseRegValue((string)@shell_exec('reg query ' . escapeshellarg($key) . $value . ' 2>NUL'));
+    }
+
+    /** A "reg query" kimenetéből az érték ("(nincs érték beállítva)" és üres → null). */
+    public static function parseRegValue(string $output): ?string
+    {
+        if (!preg_match('/\sREG_(?:EXPAND_)?SZ(?:[ \t]{4}(.*?))?[ \t]*\r?$/m', $output, $m)) return null;
+        $value = trim($m[1] ?? '');
+        return ($value === '' || $value[0] === '(') ? null : $value;
+    }
+
+    /** Az URL-típust (http, mailto) alapból megnyitó program neve, pl. "chrome.exe", vagy null. */
+    public static function defaultHandlerExe(string $scheme): ?string
+    {
+        $progId = self::regValue('HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\' . $scheme . '\\UserChoice', 'ProgId');
+        $command = $progId !== null ? self::regValue('HKCR\\' . $progId . '\\shell\\open\\command') : null;
+        $command = $command ?? self::regValue('HKCR\\' . $scheme . '\\shell\\open\\command');
+        return $command !== null ? self::commandExe($command) : null;
+    }
+
+    /** A program neve egy parancssorból ('"C:\\...\\chrome.exe" --single-argument %1' → "chrome.exe"). */
+    public static function commandExe(string $command): ?string
+    {
+        return preg_match('/([^\\\\\/"]+\.exe)\b/i', $command, $m) ? strtolower($m[1]) : null;
+    }
+
+    /** Windows verzió a névjegyhez és a visszajelzéshez (gépnév nélkül). */
+    public static function windowsVersion(): string
+    {
+        return trim(php_uname('s') . ' ' . php_uname('r') . ' ' . php_uname('v') . ' ' . php_uname('m'));
+    }
+
+    // ------------------------------------------------------------------
+    // Környezeti változók
+    // ------------------------------------------------------------------
+
+    /** A PATH elejére kerülő mappák: rendszer\bin (composer parancs), rendszer\php és rendszer\node. */
+    public static function pathPrefix(): array
+    {
+        $dirs = [pw_path(PW_SYS, 'bin'), dirname(PHP_BINARY)];
+        if ($node = self::node()) $dirs[] = dirname($node);
+        return $dirs;
+    }
+
+    /** A változónevek kis-/nagybetűre érzéketlenek (Path vs. PATH) – a meglévő kulcsot adja vissza. */
+    public static function envKey(array $env, string $name): string
+    {
+        foreach ($env as $key => $_) {
+            if (strcasecmp((string)$key, $name) === 0) return (string)$key;
+        }
+        return $name;
+    }
+
+    /** A gyerekfolyamatok környezete: az aktuális környezet + kiegészített PATH + $extra (null = törlés). */
+    public static function childEnv(array $extra = []): array
+    {
+        $env = getenv();
+        if (!is_array($env)) $env = [];
+
+        $key = self::envKey($env, 'PATH');
+        $parts = self::pathPrefix();
+        if (($env[$key] ?? '') !== '') $parts[] = $env[$key];
+        $env[$key] = implode(PATH_SEPARATOR, $parts);
+
+        foreach ($extra as $name => $value) {
+            $k = self::envKey($env, (string)$name);
+            if ($value === null) {
+                unset($env[$k]);
+            } else {
+                $env[$k] = (string)$value;
+            }
+        }
+        return $env;
+    }
+
+    // ------------------------------------------------------------------
+    // Folyamatok
+    // ------------------------------------------------------------------
+
+    /**
+     * Háttérfolyamat indítása ablak nélkül; a kimenet (stdout + stderr) a $logFile-ba kerül.
+     * A napló mindig új fájl. A gyerek és az unokái ugyanazt a fájlmutatót öröklik, ezért a
+     * kimenetük sorrendben követi egymást.
+     * @return resource|null
+     */
+    public static function spawn(array $cmd, string $cwd, array $env, string $logFile)
+    {
+        $descriptors = [0 => ['null'], 1 => ['file', $logFile, 'a'], 2 => ['redirect', 1]];
+        $pipes = [];
+        $proc = @proc_open($cmd, $descriptors, $pipes, $cwd, $env, ['bypass_shell' => true, 'suppress_errors' => true]);
+        return is_resource($proc) ? $proc : null;
+    }
+
+    /** A folyamat programjának neve kisbetűvel (pl. "php.exe"), vagy null, ha nem fut. */
+    public static function processName(int $pid): ?string
+    {
+        if ($pid <= 0) return null;
+        return self::parseTasklist((string)shell_exec('tasklist /FI "PID eq ' . $pid . '" /FO CSV /NH 2>NUL'), $pid);
+    }
+
+    /** A "tasklist /FO CSV /NH" kimenetéből a PID-hez tartozó program neve. */
+    public static function parseTasklist(string $csv, int $pid): ?string
+    {
+        if (preg_match('/^"([^"]+)","' . $pid . '"/m', $csv, $m)) return strtolower($m[1]);
+        return null;
+    }
+
+    /** Folyamatok leállítása az összes leszármazottjukkal együtt (pl. artisan serve + a php -S gyereke). */
+    public static function killTree(array $pids): void
+    {
+        foreach (array_unique(array_map('intval', $pids)) as $pid) {
+            if ($pid > 0) exec('taskkill /PID ' . $pid . ' /T /F >NUL 2>&1');
+        }
+    }
+
+    /** A folyamat ablakainak bezárása, mintha az X-re kattintottak volna (taskkill /F nélkül: WM_CLOSE). */
+    public static function closeWindows(array $pids): void
+    {
+        foreach (array_unique(array_map('intval', $pids)) as $pid) {
+            if ($pid > 0) exec('taskkill /PID ' . $pid . ' >NUL 2>&1');
+        }
+    }
+
+    /**
+     * A gépen figyelő (LISTEN) TCP portok.
+     * @return array<int,int>|null port => PID; null, ha a netstat nem futott le
+     */
+    public static function listeningPorts(): ?array
+    {
+        $out = shell_exec('netstat -ano 2>NUL');
+        return is_string($out) && trim($out) !== '' ? self::parseNetstat($out) : null;
+    }
+
+    /**
+     * A "netstat -ano" kimenetéből a figyelő portok. Figyelő socket az, amelyiknek a távoli címe
+     * 0.0.0.0:0 vagy [::]:0 – így nem függünk a magyar/angol Windows szövegeitől ("LISTENING").
+     * @return array<int,int> port => PID
+     */
+    public static function parseNetstat(string $out): array
+    {
+        $ports = [];
+        foreach (preg_split('/\r?\n/', $out) as $line) {
+            $cols = preg_split('/\s+/', trim($line));
+            if (count($cols) < 5 || strtoupper($cols[0]) !== 'TCP') continue;
+            if (!preg_match('/:0$/', $cols[2]) || !preg_match('/:(\d+)$/', $cols[1], $m)) continue;
+            $ports[(int)$m[1]] = (int)end($cols);
+        }
+        return $ports;
+    }
+
+    /** Figyel-e valami a porton? $ports: a listeningPorts() előre lekért eredménye. */
+    public static function isListening(int $port, ?array $ports = null): bool
+    {
+        if ($port <= 0) return false;
+        if ($ports === null) $ports = self::listeningPorts() ?? [];
+        return isset($ports[$port]);
+    }
+
+    /** A porton figyelő folyamat PID-je (üres tömb, ha nincs). */
+    public static function pidsOnPort(int $port): array
+    {
+        $ports = self::listeningPorts() ?? [];
+        return !empty($ports[$port]) ? [$ports[$port]] : [];
+    }
+
+    // ------------------------------------------------------------------
+    // Programok indítása ("launch spec": ['argv' => [...]] vagy ['cmdline' => '...'])
+    // A 'focus' kulcs leírja, melyik ablakot kell a felügyelőnek előtérbe hoznia (WinFocus.php):
+    // exe / class (az ablak programja, osztálya), title (a címében szerepel), existingAfter (ennyi
+    // másodperc után egy már korábban is nyitott ablak is jó), handler (az exe az alapértelmezett
+    // programból: http, mailto), timeout.
+    // ------------------------------------------------------------------
+
+    /** Launch spec végrehajtása – a felügyelő hívja, hogy a program ne örökölje a webszerver socketjeit. */
+    public static function launch(array $spec): bool
+    {
+        $cmd = $spec['cmdline'] ?? ($spec['argv'] ?? null);
+        if (!$cmd) return false;
+        $cwd = (isset($spec['cwd']) && is_dir($spec['cwd'])) ? $spec['cwd'] : null;
+        $env = (isset($spec['env']) && is_array($spec['env'])) ? $spec['env'] : null;
+        $pipes = [];
+        $proc = @proc_open($cmd, [0 => ['null'], 1 => ['null'], 2 => ['null']], $pipes, $cwd, $env,
+            ['bypass_shell' => true, 'suppress_errors' => true]);
+        if (!is_resource($proc)) return false;
+        if (isset($spec['cmdline'])) proc_close($proc);   // a "cmd /c start" és az "explorer" azonnal visszatér
+        return true;                                      // a közvetlenül indított programot nem várjuk meg
+    }
+
+    /** "cmd.exe /d /s /c "start "cím" [/D "mappa"] [/B] "arg1" "arg2"..."" parancssor. */
+    public static function cmdStart(string $title, array $args, ?string $dir = null, bool $sameConsole = true): string
+    {
+        $quote = function (string $s): string {
+            if (strpos($s, '"') !== false) {
+                throw new InvalidArgumentException('Idézőjelet tartalmazó útvonal nem indítható.');
+            }
+            return '"' . $s . '"';
+        };
+        $line = 'start ' . $quote($title);
+        if ($dir !== null) $line .= ' /D ' . $quote($dir);
+        if ($sameConsole) $line .= ' /B';
+        foreach ($args as $arg) $line .= ' ' . $quote((string)$arg);
+        return (getenv('ComSpec') ?: 'cmd.exe') . ' /d /s /c "' . $line . '"';
+    }
+
+    /** Mappa megnyitása az Intézőben. */
+    public static function openFolderSpec(string $dir): array
+    {
+        return ['argv' => ['explorer.exe', $dir], 'focus' => self::explorerFocus($dir)];
+    }
+
+    /** Az Intéző megnyitása úgy, hogy a fájl ki legyen jelölve (pl. a visszajelzéshez csatolandó napló). */
+    public static function revealFileSpec(string $file): array
+    {
+        if (strpos($file, '"') !== false) throw new InvalidArgumentException('Érvénytelen fájlnév.');
+        return ['cmdline' => 'explorer.exe /select,"' . $file . '"', 'focus' => self::explorerFocus(dirname(str_replace('\\', '/', $file)))];
+    }
+
+    /** Az Intéző ablaka a mappa nevét viseli címként (ha a mappa már nyitva van, azt az ablakot hozza elő). */
+    private static function explorerFocus(string $dir): array
+    {
+        return ['class' => 'CabinetWClass', 'title' => basename(str_replace('\\', '/', $dir)), 'existingAfter' => 1.5, 'timeout' => 10];
+    }
+
+    /**
+     * URL (http, https, mailto) vagy fájl megnyitása az alapértelmezett programmal, a "start" paranccsal
+     * (mint a korábbi PocketWeb). A cél környezeti változóban megy át, így a cmd.exe nem értelmezi a benne
+     * lévő %-jeleket (pl. %20) és a különleges karaktereket (&, ^).
+     */
+    public static function openSpec(string $target): array
+    {
+        if ($target === '' || strpbrk($target, "\"\r\n\0") !== false) throw new InvalidArgumentException('Érvénytelen cím.');
+        $env = getenv();
+        if (!is_array($env)) $env = [];
+        $env[self::envKey($env, 'PW_OPEN')] = $target;
+        $mail = stripos($target, 'mailto:') === 0;
+        return [
+            'cmdline' => (getenv('ComSpec') ?: 'cmd.exe') . ' /d /v:off /s /c "start "" "%PW_OPEN%""',
+            'env' => $env,
+            // a böngésző az új lapot a legutóbb használt ablakában nyitja meg: ha nincs új ablak, azt hozzuk elő
+            'focus' => ['handler' => $mail ? 'mailto' : 'http', 'existingAfter' => $mail ? 2.0 : 1.0, 'timeout' => 15],
+        ];
+    }
+
+    /**
+     * URL vagy fájl megnyitása a választott böngészőben: default (a rendszer alapértelmezettje), chrome, firefox, edge.
+     * (A vezérlőpult a saját Edge ablakában fut, ettől függetlenül.)
+     * @return array|string launch spec vagy hibaüzenet
+     */
+    public static function browserSpec(string $browser, string $target)
+    {
+        if ($browser === '' || $browser === 'default') return self::openSpec($target);
+        $names = ['chrome' => 'A Google Chrome', 'firefox' => 'A Mozilla Firefox', 'edge' => 'A Microsoft Edge'];
+        if (!isset($names[$browser])) return 'Érvénytelen böngésző.';
+        if ($target === '' || strpbrk($target, "\"\r\n\0") !== false) throw new InvalidArgumentException('Érvénytelen cím.');
+        $exe = self::browserExe($browser);
+        if ($exe === null) return $names[$browser] . ' nem található ezen a gépen. A Beállításokban válassz másik böngészőt!';
+        // a böngésző az új lapot a legutóbb használt ablakában nyitja meg: ha nincs új ablak, azt hozzuk elő
+        return ['argv' => [$exe, $target], 'focus' => ['exe' => strtolower(basename($exe)), 'existingAfter' => 1.0, 'timeout' => 15]];
+    }
+
+    /** A böngésző programja: a szokásos telepítési helyek, majd a Windows "App Paths" bejegyzése. */
+    public static function browserExe(string $browser): ?string
+    {
+        $exe = ['chrome' => 'chrome.exe', 'firefox' => 'firefox.exe', 'edge' => 'msedge.exe'][$browser] ?? null;
+        if ($exe === null) return null;
+        $pf = (string)(getenv('ProgramFiles') ?: 'C:\\Program Files');
+        $pf86 = (string)(getenv('ProgramFiles(x86)') ?: 'C:\\Program Files (x86)');
+        $local = (string)(getenv('LOCALAPPDATA') ?: '');
+        $paths = [
+            'chrome' => [$pf . '\\Google\\Chrome\\Application\\chrome.exe', $pf86 . '\\Google\\Chrome\\Application\\chrome.exe', $local . '\\Google\\Chrome\\Application\\chrome.exe'],
+            'firefox' => [$pf . '\\Mozilla Firefox\\firefox.exe', $pf86 . '\\Mozilla Firefox\\firefox.exe', $local . '\\Mozilla Firefox\\firefox.exe'],
+            'edge' => [$pf86 . '\\Microsoft\\Edge\\Application\\msedge.exe', $pf . '\\Microsoft\\Edge\\Application\\msedge.exe'],
+        ][$browser];
+        foreach ($paths as $path) {
+            if (is_file($path)) return $path;
+        }
+        foreach (['HKCU', 'HKLM'] as $root) {
+            $path = self::regValue($root . '\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\' . $exe);
+            if ($path !== null && is_file($path = trim(self::expandEnv($path), '"'))) return $path;
+        }
+        return null;
+    }
+
+    /** %VÁLTOZÓ% hivatkozások kifejtése (a registry REG_EXPAND_SZ értékeiben). */
+    public static function expandEnv(string $text): string
+    {
+        return (string)preg_replace_callback('/%([^%]+)%/', function ($m) {
+            $value = getenv($m[1]);
+            return $value !== false ? $value : $m[0];
+        }, $text);
+    }
+
+    /** Parancssor ablak a projekt mappájában; a PATH-ban a mellékelt php, composer, node és npm. */
+    public static function terminalSpec(string $dir, string $title): array
+    {
+        return ['cmdline' => self::cmdStart($title, ['cmd.exe'], $dir, false), 'cwd' => $dir, 'env' => self::childEnv()];
+    }
+
+    /**
+     * A kiválasztott szerkesztő elindítása a projekt mappájával; ha $file is meg van adva, az a $line. sornál nyílik meg
+     * (a Terminál panelen a hiba helyére kattintva).
+     * @return array|string launch spec vagy hibaüzenet
+     */
+    public static function editorSpec(string $editor, string $dir, ?string $file = null, ?int $line = null)
+    {
+        $names = ['vscode' => 'VS Code', 'sublime' => 'Sublime Text', 'notepadpp' => 'Notepad++', 'phpstorm' => 'PhpStorm', 'webstorm' => 'WebStorm'];
+        if (!isset($names[$editor])) return 'Érvénytelen szerkesztő.';
+
+        $pf = (string)(getenv('ProgramFiles') ?: 'C:\\Program Files');
+        $pf86 = (string)(getenv('ProgramFiles(x86)') ?: 'C:\\Program Files (x86)');
+        $local = (string)(getenv('LOCALAPPDATA') ?: '');
+        $jetbrains = function (string $product, string $exe) use ($pf, $local): array {
+            $found = array_merge(
+                glob($pf . '\\JetBrains\\' . $product . '*\\bin\\' . $exe) ?: [],
+                glob($local . '\\Programs\\' . $product . '*\\bin\\' . $exe) ?: [],
+                glob($local . '\\JetBrains\\Toolbox\\apps\\' . $product . '\\*\\*\\bin\\' . $exe) ?: []
+            );
+            rsort($found);   // a legújabb verzió előre
+            $found[] = $local . '\\JetBrains\\Toolbox\\scripts\\' . strtolower($product) . '.cmd';
+            return $found;
+        };
+        // [ismert telepítési helyek, PATH-ban keresett nevek, extra argumentumok, az ablak programja]
+        $options = [
+            'vscode'    => [[$local . '\\Programs\\Microsoft VS Code\\Code.exe', $pf . '\\Microsoft VS Code\\Code.exe'], ['code.cmd'], [], 'code.exe'],
+            'sublime'   => [[$pf . '\\Sublime Text\\sublime_text.exe', $pf . '\\Sublime Text 4\\sublime_text.exe', $pf . '\\Sublime Text 3\\sublime_text.exe'], ['subl.exe', 'sublime_text.exe'], [], 'sublime_text.exe'],
+            'notepadpp' => [[$pf . '\\Notepad++\\notepad++.exe', $pf86 . '\\Notepad++\\notepad++.exe'], ['notepad++.exe'], ['-openFoldersAsWorkspace'], 'notepad++.exe'],
+            'phpstorm'  => [$jetbrains('PhpStorm', 'phpstorm64.exe'), ['phpstorm64.exe', 'phpstorm.cmd', 'phpstorm.bat'], [], 'phpstorm64.exe'],
+            'webstorm'  => [$jetbrains('WebStorm', 'webstorm64.exe'), ['webstorm64.exe', 'webstorm.cmd', 'webstorm.bat'], [], 'webstorm64.exe'],
+        ];
+        [$paths, $commands, $args, $windowExe] = $options[$editor];
+
+        $exe = null;
+        foreach ($paths as $path) {
+            if (is_file($path)) {
+                $exe = $path;
+                break;
+            }
+        }
+        if (!$exe) {
+            foreach ($commands as $command) {
+                if ($exe = self::which($command)) break;
+            }
+        }
+        if (!$exe) return $names[$editor] . ' nem található ezen a gépen.';
+
+        $argv = array_merge([$exe], $args, [$dir]);
+        if ($file !== null) {
+            $line = max(1, (int)$line);
+            $target = [
+                'vscode' => [$dir, '-g', $file . ':' . $line],
+                'sublime' => [$dir, $file . ':' . $line],
+                'notepadpp' => ['-n' . $line, $file],
+                'phpstorm' => [$dir, '--line', (string)$line, $file],
+                'webstorm' => [$dir, '--line', (string)$line, $file],
+            ][$editor];
+            $argv = array_merge([$exe], $target);
+        }
+        $env = self::childEnv();   // így a szerkesztő termináljában is elérhető a php, composer, node
+        // a szerkesztők a projekt mappájának nevét írják a címsorba (a Notepad++ a fájlét)
+        $focus = ['exe' => $windowExe, 'title' => $editor === 'notepadpp' ? null : basename($dir),
+            'existingAfter' => $editor === 'notepadpp' ? 1.5 : 0.8, 'timeout' => 45];
+        if (preg_match('/\.exe$/i', $exe)) return ['argv' => $argv, 'env' => $env, 'focus' => $focus];
+        return ['cmdline' => self::cmdStart('', $argv), 'env' => $env, 'focus' => $focus];   // .cmd/.bat csak cmd.exe-n keresztül
+    }
+
+    // ------------------------------------------------------------------
+    // Böngésző (vezérlőpult ablak, képernyőképek)
+    // ------------------------------------------------------------------
+
+    /** Chromium alapú böngésző keresése: Edge, Chrome, Brave, Vivaldi. A POCKETWEB_BROWSER változó felülírja. */
+    public static function findBrowser(): ?array
+    {
+        $forced = getenv('POCKETWEB_BROWSER');
+        if (is_string($forced) && $forced !== '') {
+            if (in_array(strtolower($forced), ['none', 'default'], true)) return null;
+            if (is_file($forced)) return ['id' => 'custom', 'name' => basename($forced), 'path' => $forced];
+        }
+        $pf = (string)(getenv('ProgramFiles') ?: 'C:\\Program Files');
+        $pf86 = (string)(getenv('ProgramFiles(x86)') ?: 'C:\\Program Files (x86)');
+        $local = (string)(getenv('LOCALAPPDATA') ?: '');
+        $candidates = [];
+        foreach ([$pf86, $pf, $local] as $base) $candidates[] = ['edge', 'Microsoft Edge', $base . '\\Microsoft\\Edge\\Application\\msedge.exe'];
+        foreach ([$pf, $pf86, $local] as $base) $candidates[] = ['chrome', 'Google Chrome', $base . '\\Google\\Chrome\\Application\\chrome.exe'];
+        foreach ([$pf, $local] as $base) $candidates[] = ['brave', 'Brave', $base . '\\BraveSoftware\\Brave-Browser\\Application\\brave.exe'];
+        $candidates[] = ['vivaldi', 'Vivaldi', $local . '\\Vivaldi\\Application\\vivaldi.exe'];
+
+        foreach ($candidates as [$id, $name, $path]) {
+            if (is_file($path)) return ['id' => $id, 'name' => $name, 'path' => $path];
+        }
+        return null;
+    }
+
+    /** A vezérlőpult ablak saját, elkülönített böngészőprofilja. */
+    public static function browserProfile(array $browser): string
+    {
+        if ($browser['id'] === 'edge') return pw_path(PW_SYS, '.edge_profile');   // a korábbi verziókkal azonos
+        return pw_path(PW_SYS, '.browser_profile', $browser['id']);
+    }
+
+    /** Parancssor a vezérlőpult "alkalmazás" ablakához (címsor és fülek nélkül). */
+    public static function appWindowCommand(array $browser, string $url): array
+    {
+        $profile = self::browserProfile($browser);
+        $cmd = [$browser['path'], '--app=' . $url, '--user-data-dir=' . $profile, '--no-first-run', '--no-default-browser-check'];
+        if (!is_dir($profile)) $cmd[] = '--window-size=1280,860';
+        return $cmd;
+    }
+
+    /**
+     * Fut-e még a vezérlőpult böngészője? A Chromium a profil "lockfile"-ját FILE_FLAG_DELETE_ON_CLOSE-zal,
+     * csak olvasást engedve nyitja meg: amíg fut, a fájl létezik és írásra nem nyitható meg;
+     * kilépéskor (összeomláskor is) a Windows törli.
+     */
+    public static function browserRunning(string $profile): bool
+    {
+        $lock = pw_path($profile, 'lockfile');
+        if (!is_file($lock)) return false;
+        $handle = @fopen($lock, 'r+');
+        if ($handle === false) return true;
+        fclose($handle);
+        return false;
+    }
+
+    /** Helyi fájl URL-je (file:///C:/...), a böngészőknek. */
+    public static function fileUrl(string $path): string
+    {
+        $parts = explode('/', str_replace('\\', '/', $path));
+        foreach ($parts as $i => $part) {
+            if (!($i === 0 && preg_match('/^[A-Za-z]:$/', $part))) $parts[$i] = rawurlencode($part);
+        }
+        $url = implode('/', $parts);
+        return 'file://' . (substr($url, 0, 1) === '/' ? '' : '/') . $url;
+    }
+}
