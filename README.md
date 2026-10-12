@@ -1,5 +1,5 @@
 # PocketWeb
-verzió 3.0 – Windows változat
+verzió 3.1 – Windows változat
 
 A PocketWeb egy hordozható, faék egyszerűségű webfejlesztő eszköz Windowsra. Telepítés nélkül, rendszergazdai jogok nélkül futtatható. Csak kibontod és már használhatod is!
 
@@ -7,7 +7,7 @@ Mellékelt eszközök: php, node.js, Composer és Adminer
 
 > A GitHubon a `rendszer\php` és a `rendszer\node` mappa csak a leírást tartalmazza: a php.exe és a node.exe a kész (letölthető) csomagban van benne. Ha a forrásból állítod össze, lásd a mappákban lévő `DOWNLOAD.me` fájlokat.
 
-## Újdonságok a 3.0-ban
+## Újdonságok a 3.1-ben
 
 - **Terminál panel**: nincs több felugró fekete ablak. A projektek szervereinek (`php artisan serve`, `php -S`) és a Laravel / WordPress telepítőknek a kimenete a Vezérlőpult alján, VS Code-szerű panelen jelenik meg, színesen, külön fülön minden folyamat. A telepítők végén nem kell gombot nyomni: a fül jelzi, hogy kész, és értesítés is érkezik.
 - **Névjegy** ablak a verziókkal és **visszajelzés küldésével** a feedback@zseli.hu címre: a napló csatolmányként megy, ha a levelezőprogram tudja (klasszikus Outlook, Thunderbird), különben a kivonata kerül a levélbe.
