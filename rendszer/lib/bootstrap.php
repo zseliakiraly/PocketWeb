@@ -22,6 +22,7 @@ require_once __DIR__ . '/Feedback.php';
 require_once __DIR__ . '/Mapi.php';
 require_once __DIR__ . '/WinFocus.php';
 require_once __DIR__ . '/CodeCheck.php';
+require_once __DIR__ . '/Transfer.php';
 
 /** Útvonal összefűzése. */
 function pw_path(string ...$parts): string

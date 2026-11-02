@@ -52,6 +52,22 @@ function run(array $cmd, ?string $cwd = null): int
     return is_resource($proc) ? proc_close($proc) : 127;
 }
 
+/** Folyamatjelző egyetlen sorban: a Terminál panel a \r-rel ugyanazt a sort írja felül ($final: lezárja a sort). */
+function progress(string $text, bool $final = false): void
+{
+    static $shown = 0.0;
+    if (!$final && microtime(true) - $shown < 0.3) return;
+    $shown = microtime(true);
+    fwrite(STDOUT, "\r    " . $text . '          ' . ($final ? "\n" : ''));
+}
+
+function format_bytes(int $bytes): string
+{
+    if ($bytes >= 1073741824) return sprintf('%.1f GB', $bytes / 1073741824);
+    if ($bytes >= 1048576) return sprintf('%.1f MB', $bytes / 1048576);
+    return max(1, (int)round($bytes / 1024)) . ' KB';
+}
+
 /** Fájl letöltése folyamatjelzővel. */
 function download(string $url, string $dest): bool
 {
