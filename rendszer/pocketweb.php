@@ -171,6 +171,10 @@ final class Supervisor
         foreach (glob(pw_path(PW_RUN, 'queue', '*')) ?: [] as $file) @unlink($file);
         foreach (glob(pw_path(PW_RUN, 'terminal-*.command')) ?: [] as $file) @unlink($file);
         foreach (glob(pw_path(PW_RUN, 'mail-*.json')) ?: [] as $file) @unlink($file);
+        foreach (glob(pw_path(PW_RUN, 'transfer-*.json')) ?: [] as $file) @unlink($file);
+        // a megszakadt export / import maradékai (egy félbemaradt felülírásnál a régi projekt visszakerül a helyére)
+        Transfer::recover();
+        Transfer::cleanTemp();
         foreach (['heartbeat', 'bye', 'supervisor.alive'] as $name) @unlink(Runtime::file($name));
         if (@filesize(Runtime::file('pocketweb.log')) > 1048576) @unlink(Runtime::file('pocketweb.log'));
 

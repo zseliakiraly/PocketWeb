@@ -18,6 +18,7 @@ Mellékelt eszközök: php, node.js, Composer és Adminer
 - Kíméletes a géppel: a Vezérlőpult csak akkor kérdezi le a háttérfolyamatokat, ha fut valami (szerver, telepítés), és a projektek listáját csak induláskor, a Frissítés gombra és egy új projekt elkészülésekor tölti újra.
 - **Hol a hiba?** Ha egy Laravel projektben szintaxishiba van, vagy egy oldal hibát dob, a Terminál panel megmutatja a fájlt, a sort és a kódrészletet; a hiba helyére kattintva a szerkesztő a hibás sornál nyílik meg.
 - **Választható böngésző** a projektekhez (rendszer alapértelmezett, Chrome, Firefox, Edge); a Vezérlőpult továbbra is a saját Edge ablakában fut.
+- **Import / Export**: a projektek egy vagy több projektet tartalmazó ZIP fájlba menthetők (pl. a hálózati meghajtóra), és onnan visszatölthetők – 7-Zip vagy WinZip nélkül.
 
 ## Indítás és használat
 
@@ -110,6 +111,27 @@ A Névjegy ablakban látszanak a PocketWeb és az összetevők (PHP, Node.js, Co
 
 A levelet mindig te küldöd el, a saját fiókodból: a PocketWeb semmit nem küld el a tudtod nélkül.
 
+___________________________
+7. Import / Export (mentés a hálózati meghajtóra)
+
+A fejléc **Import / Export** gombjával a projekteket egy ZIP fájlba mentheted (pl. a hálózati meghajtódra vagy egy pendrive-ra), és egy másik gépen – vagy a következő órán – visszatöltheted. Közvetlenül a hálózati meghajtón dolgozni lassú és kockázatos; így a projekt mindig a gépen (a PocketWeb mappájában) van, a hálózati meghajtóra csak a mentés kerül.
+
+**Exportálás**
+- Jelöld ki a menteni kívánt projekteket (akár többet is, vagy a **Mind** jelölőnégyzettel az összeset): mindegyik a saját mappájával kerül a ZIP-be.
+- A **Tallózás…** gombbal válaszd ki a célmappát. A tallózó a gyorselérés mappáit (Asztal, Dokumentumok, Letöltések, OneDrive) és a meghajtókat mutatja – a csatlakoztatott hálózati meghajtókat is (pl. `H:`). Az **Új mappa** gombbal mappát is létrehozhatsz. Útvonalat be is írhatsz (pl. `H:\Mentések` vagy `\\szerver\megosztás\mappa`).
+- A fájlnév alapból a projekt neve és az időpont (pl. `webshop_2026-11-02_1530.zip`), de átírhatod. Ha már van ilyen fájl, a PocketWeb rákérdez, felülírja-e.
+- **Függőségek nélkül**: a `vendor` és a `node_modules` mappa kimarad, így a ZIP jóval kisebb és gyorsabban elkészül. Importáláskor a PocketWeb újratelepíti őket (`composer install`, `npm install`) – ehhez internet kell.
+- A ZIP előbb a gépen készül el (`%TEMP%\PocketWeb`), és csak a kész fájl kerül át a célmappába: a hálózati meghajtón nem marad félkész fájl, és a korábbi, azonos nevű mentés csak a sikeres másolás után cserélődik le. A folyamat a Terminál panelen követhető; a végén az értesítés **Megmutatás** gombja kijelöli a fájlt az Intézőben.
+- Ami kimarad (újra létrejön magától): a Laravel lefordított nézetei, munkamenetei, gyorsítótára és naplói, valamint a `public\storage` link.
+
+**Importálás**
+- Válaszd ki a ZIP fájlt (**Tallózás…**, vagy írd be az útvonalát): a PocketWeb kilistázza a benne lévő projekteket.
+- Ha egy projekt már létezik, választhatsz: **Új néven** (pl. `webshop-2`, a név átírható), vagy **Felülírás** – ekkor a meglévő projekt tartalma törlődik, és a ZIP-ben lévő változat kerül a helyére (a PocketWeb előtte megerősítést kér, és leállítja a projekt szerverét).
+- A ZIP-et a PocketWeb előbb átmásolja a gépre, és onnan bontja ki egy rejtett munkamappába; a kész projekt csak a végén kerül a helyére. Felülírásnál a régi projekt csak a sikeres csere után törlődik – ha közben megszakad (pl. kilépés), a következő indításkor visszakerül.
+- Ha a projektnek függőségek kellenek (pl. függőségek nélkül exportálták, vagy a GitHubról letöltött Laravel projekt), a beüzemelés külön fülön folytatódik (`composer install`, `.env`, alkalmazás kulcs, SQLite adatbázis, `npm install`); addig a kártyán „Telepítés folyamatban…” látszik.
+- Ha egy importált projekt portját a gépen már egy másik projekt használja, új portot kap; WordPressnél a PocketWeb az oldal címét is átírja az adatbázisban.
+- Nem csak PocketWeb exportot lehet importálni: a ZIP-be tömörített projekt mappa, a projekt tartalma (ilyenkor a ZIP neve lesz a projekt neve) vagy az egész `projektek` mappa is működik.
+
 ## VS Code és a mellékelt PHP
 
 A PocketWeb a saját, hordozható PHP-ját (`rendszer\php\php.exe`), Composerét és Node.js-ét használja, a gépre nem kell PHP-t telepíteni. Ahhoz, hogy a VS Code is ezeket használja, **mindig a PocketWebből nyisd meg a projektet**: a kártya **Megnyitás szerkesztőben** gombjával.
@@ -151,5 +173,6 @@ A `where.exe php` első sora a PocketWeb PHP-ja legyen (`…\PocketWeb\rendszer\
 - A Vezérlőpult (`rendszer\index.html`) az `api.php`-n keresztül kéri a feladatokat; az `api.php` ezeket üzenetsoron (`rendszer\.run\queue`) adja át a felügyelőnek, a kimenetük pedig a `rendszer\.run\jobs\` alatti naplófájlokból jut el a Terminál panelre. A beépített PHP szerver egyszerre csak egy kérést szolgál ki, ezért a Vezérlőpult csak akkor kérdez le, ha fut valami.
 - A programokat (Intéző, böngésző, szerkesztő) a felügyelő indítja; mivel háttérfolyamat, a Windows nem engedné az ablakukat előtérbe hozni. Ezért a felügyelő megkeresi az új ablakot, és a user32.dll-lel (PHP FFI) előre hozza (`rendszer\lib\WinFocus.php`). URL-t és fájlt a `start` paranccsal nyit meg.
 - A visszajelzés napló csatolása a Windows Simple MAPI felületével történik (`rendszer\lib\Mapi.php`, `rendszer\tasks\send-mail.php`), ugyanígy, ahogy az Intéző „Küldés → Levél címzettje” parancsa.
+- Import / Export: a tallózást és a ZIP tartalmának beolvasását az `api.php` végzi (`rendszer\lib\Transfer.php`), a ZIP készítését és kibontását háttérfeladat (`rendszer\tasks\export.php`, `import.php`, a beüzemelést `setup-project.php`), a PHP zip kiterjesztésével. A ZIP gyökerében a projektek mappái vannak, mellettük a `pocketweb-export.json` (a projektek típusa, portja, a kihagyott függőségek).
 - A Laravel szervert a `rendszer\tasks\serve.php` indítja (`php artisan serve`): előtte szintaxis-ellenőrzés, közben a `storage\logs` figyelése (`rendszer\lib\CodeCheck.php`).
 - Közös kód: `rendszer\lib\` (a Windows-műveletek: `Platform.php`, visszajelzés: `Feedback.php`), telepítők: `rendszer\tasks\`, terminál megjelenítő: `rendszer\vendor\xterm` (xterm.js, MIT licenc).

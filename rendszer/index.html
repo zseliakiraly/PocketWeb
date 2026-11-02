@@ -143,6 +143,10 @@
                 <button onclick="refreshDashboard()" class="p-2 rounded-sm hover:bg-gray-800 text-gray-400 hover:text-white transition-colors border border-transparent hover:border-gray-700" title="Vezérlőpult újratöltése">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                 </button>
+                <button id="transferBtn" onclick="openTransferModal()" class="bg-gray-800 hover:bg-gray-700 text-gray-200 hover:text-white px-3 py-2 rounded-sm text-sm font-medium transition-colors flex items-center gap-2 border border-gray-700" title="Projektek mentése ZIP fájlba (pl. a hálózati meghajtóra) és visszatöltése">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path></svg>
+                    <span class="hidden sm:inline">Import / Export</span>
+                </button>
                 <div class="relative" id="headerActions">
                     <button onclick="toggleDropdown(event)" class="bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-sm text-sm font-medium transition-colors flex items-center gap-2 shadow-lg shadow-brand-500/20 border border-brand-500/50 relative z-50">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
@@ -289,6 +293,96 @@
             <div class="bg-gray-850 px-6 py-4 border-t border-gray-800 flex justify-end gap-3">
                 <button id="confirmCancelBtn" class="px-4 py-2 rounded-sm text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors">Mégsem</button>
                 <button id="confirmOkBtn" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-sm text-sm font-medium transition-colors shadow-lg shadow-red-500/20">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import / Export: projektek mentése ZIP fájlba és visszatöltése -->
+    <div id="transferModal" class="fixed inset-0 z-[70] hidden flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div class="bg-gray-900 border border-gray-700 rounded-md shadow-2xl w-full max-w-2xl overflow-hidden transition-all transform scale-95 opacity-0 flex flex-col max-h-[90vh]" id="transferModalContent">
+            <div class="px-6 pt-5 shrink-0">
+                <h2 class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                    <svg class="w-6 h-6 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path></svg>
+                    Import / Export
+                </h2>
+                <div class="flex gap-1 border-b border-gray-800 text-sm">
+                    <button id="transferTabExport" onclick="transferTab('export')" class="px-4 py-2 -mb-px border-b-2 font-medium transition-colors">Exportálás <span class="text-gray-500 font-normal">(mentés ZIP-be)</span></button>
+                    <button id="transferTabImport" onclick="transferTab('import')" class="px-4 py-2 -mb-px border-b-2 font-medium transition-colors">Importálás <span class="text-gray-500 font-normal">(ZIP-ből)</span></button>
+                </div>
+            </div>
+            <div class="px-6 py-5 overflow-y-auto flex-1 min-h-0">
+                <!-- Exportálás -->
+                <div id="exportPane" class="space-y-5">
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium text-gray-300">Exportálandó projektek</span>
+                            <label class="text-xs text-gray-400 hover:text-gray-200 flex items-center gap-2 cursor-pointer"><input type="checkbox" id="exportAll" onchange="exportSelectAll(this.checked)" class="accent-[var(--brand-500)]"> Mind</label>
+                        </div>
+                        <div id="exportList" class="border border-gray-800 rounded-sm divide-y divide-gray-800 max-h-56 overflow-y-auto bg-gray-950"></div>
+                    </div>
+                    <label class="flex items-start gap-3 text-sm text-gray-300 cursor-pointer">
+                        <input type="checkbox" id="exportSkipDeps" class="mt-1 accent-[var(--brand-500)]">
+                        <span>Függőségek nélkül (<span class="font-mono text-gray-200">vendor</span>, <span class="font-mono text-gray-200">node_modules</span>)
+                            <span class="block text-xs text-gray-500 mt-0.5">Kisebb és gyorsabb ZIP. Importáláskor a PocketWeb újratelepíti őket – ehhez internetkapcsolat kell.</span></span>
+                    </label>
+                    <div>
+                        <label for="exportDir" class="block text-sm font-medium text-gray-300 mb-1">Célmappa</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="exportDir" spellcheck="false" class="flex-1 min-w-0 bg-gray-950 border border-gray-700 rounded-sm px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 placeholder-gray-600" placeholder="pl. H:\Mentések">
+                            <button onclick="browseExportDir()" class="shrink-0 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-sm text-sm text-gray-200 transition-colors">Tallózás…</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="exportFileName" class="block text-sm font-medium text-gray-300 mb-1">Fájlnév</label>
+                        <input type="text" id="exportFileName" spellcheck="false" oninput="Transfer.nameEdited = true" class="w-full bg-gray-950 border border-gray-700 rounded-sm px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+                    </div>
+                    <p class="text-xs text-gray-500 leading-relaxed">A ZIP fájl előbb ezen a gépen készül el, és csak a kész fájl kerül át a célmappába (pl. a hálózati meghajtóra) – így ott nem marad félkész fájl. A folyamatot a Terminál panelen követheted.</p>
+                </div>
+                <!-- Importálás -->
+                <div id="importPane" class="hidden space-y-5">
+                    <div>
+                        <label for="importFile" class="block text-sm font-medium text-gray-300 mb-1">ZIP fájl</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="importFile" spellcheck="false" onkeydown="if (event.key === 'Enter') inspectImport()" onchange="inspectImport()" class="flex-1 min-w-0 bg-gray-950 border border-gray-700 rounded-sm px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 placeholder-gray-600" placeholder="pl. H:\Mentések\webshop.zip">
+                            <button onclick="browseImportFile()" class="shrink-0 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-sm text-sm text-gray-200 transition-colors">Tallózás…</button>
+                        </div>
+                    </div>
+                    <div id="importInfo" class="hidden text-xs text-gray-400"></div>
+                    <div id="importListWrap" class="hidden">
+                        <div class="text-sm font-medium text-gray-300 mb-2">Projektek a ZIP fájlban</div>
+                        <div id="importList" class="border border-gray-800 rounded-sm divide-y divide-gray-800 bg-gray-950"></div>
+                    </div>
+                    <p class="text-xs text-gray-500 leading-relaxed">A PocketWeb a ZIP fájlt előbb átmásolja erre a gépre, és onnan bontja ki a projektek mappába. Ha egy projekt már létezik, új néven is importálhatod, vagy felülírhatod (a régi tartalma ekkor törlődik).</p>
+                </div>
+            </div>
+            <div class="bg-gray-850 px-6 py-4 border-t border-gray-800 flex justify-end gap-3 shrink-0">
+                <button onclick="closeTransferModal()" class="px-4 py-2 rounded-sm text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors">Mégsem</button>
+                <button id="transferOkBtn" onclick="startTransfer()" class="bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-sm text-sm font-medium transition-colors shadow-lg shadow-brand-500/20 disabled:opacity-40 disabled:pointer-events-none">Exportálás</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tallózás: mappa vagy ZIP fájl kiválasztása (a böngésző nem adja meg a valódi útvonalat, ezért saját ablak) -->
+    <div id="fsModal" class="fixed inset-0 z-[80] hidden flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div class="bg-gray-900 border border-gray-700 rounded-md shadow-2xl w-full max-w-3xl overflow-hidden transition-all transform scale-95 opacity-0 flex flex-col h-[80vh] max-h-[640px]" id="fsModalContent">
+            <div class="px-5 pt-4 pb-3 border-b border-gray-800 shrink-0">
+                <h2 id="fsTitle" class="text-lg font-semibold text-white mb-3">Mappa kiválasztása</h2>
+                <div class="flex gap-2">
+                    <button id="fsUpBtn" onclick="fsUp()" class="shrink-0 p-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-sm text-gray-300 disabled:opacity-30 disabled:pointer-events-none" title="Egy szinttel feljebb">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+                    </button>
+                    <input type="text" id="fsPath" spellcheck="false" onkeydown="if (event.key === 'Enter') fsGo(this.value)" class="flex-1 min-w-0 bg-gray-950 border border-gray-700 rounded-sm px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 placeholder-gray-600" placeholder="Ez a gép – vagy írj be egy útvonalat (pl. H:\), majd Enter">
+                </div>
+            </div>
+            <div class="flex flex-1 min-h-0">
+                <div id="fsPlaces" class="hidden sm:block w-56 shrink-0 border-r border-gray-800 overflow-y-auto py-2 text-sm"></div>
+                <div id="fsList" class="flex-1 min-w-0 overflow-y-auto py-1 text-sm"></div>
+            </div>
+            <div class="bg-gray-850 px-5 py-3 border-t border-gray-800 flex items-center gap-3 shrink-0">
+                <button id="fsNewFolderBtn" onclick="fsNewFolder()" class="shrink-0 px-3 py-2 rounded-sm text-sm text-gray-300 hover:text-white hover:bg-gray-800 border border-gray-700 transition-colors disabled:opacity-30 disabled:pointer-events-none">Új mappa</button>
+                <div id="fsSelected" class="flex-1 min-w-0 truncate text-xs text-gray-400"></div>
+                <button onclick="fsClose(null)" class="shrink-0 px-4 py-2 rounded-sm text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors">Mégsem</button>
+                <button id="fsOkBtn" onclick="fsConfirm()" class="shrink-0 bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-sm text-sm font-medium transition-colors shadow-lg shadow-brand-500/20 disabled:opacity-40 disabled:pointer-events-none">Kiválasztás</button>
             </div>
         </div>
     </div>
@@ -539,6 +633,7 @@
                 databaseView.classList.add('flex');
 
                 headerActions.classList.add('hidden');
+                document.getElementById('transferBtn').classList.add('hidden');
                 headerTitle.textContent = "Adminer Adatbázis Kezelő";
 
                 if (!adminerFrame.src || adminerFrame.src === window.location.href || adminerFrame.src === '') {
@@ -556,6 +651,7 @@
                 projectsView.classList.add('flex');
 
                 headerActions.classList.remove('hidden');
+                document.getElementById('transferBtn').classList.remove('hidden');
                 headerTitle.textContent = "Helyi Weboldalak";
 
                 navProjects.className = activeNavClass;
@@ -1023,6 +1119,490 @@
             }
         }
 
+        // =====================================================================
+        // Import / Export – projektek mentése ZIP fájlba (pl. a hálózati meghajtóra) és visszatöltése.
+        // A munka a háttérben fut (tasks\export.php, import.php), a kimenete a Terminál panelen látszik.
+        // =====================================================================
+        const Transfer = { tab: 'export', nameEdited: false, inspectFor: null, inspected: null, jobs: new Map() };
+        const transferModal = document.getElementById('transferModal');
+        const transferModalContent = document.getElementById('transferModalContent');
+
+        function formatBytes(bytes) {
+            if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
+            if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+            return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+        }
+
+        function openTransferModal(tab = 'export') {
+            renderExportList();
+            document.getElementById('exportDir').value = localStorage.getItem('pw_export_dir') || '';
+            document.getElementById('exportSkipDeps').checked = localStorage.getItem('pw_export_skipdeps') === '1';
+            Transfer.nameEdited = false;
+            Transfer.inspectFor = null;
+            updateExportName();
+            transferTab(tab);
+            transferModal.classList.remove('hidden');
+            setTimeout(() => transferModalContent.classList.remove('scale-95', 'opacity-0'), 10);
+        }
+
+        function closeTransferModal() {
+            transferModalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => transferModal.classList.add('hidden'), 200);
+        }
+
+        function transferTab(tab) {
+            Transfer.tab = tab;
+            for (const [name, id] of [['export', 'transferTabExport'], ['import', 'transferTabImport']]) {
+                const button = document.getElementById(id);
+                button.classList.toggle('border-brand-500', name === tab);
+                button.classList.toggle('text-white', name === tab);
+                button.classList.toggle('border-transparent', name !== tab);
+                button.classList.toggle('text-gray-400', name !== tab);
+            }
+            document.getElementById('exportPane').classList.toggle('hidden', tab !== 'export');
+            document.getElementById('importPane').classList.toggle('hidden', tab !== 'import');
+            updateTransferButton();
+        }
+
+        function updateTransferButton() {
+            const button = document.getElementById('transferOkBtn');
+            const count = Transfer.tab === 'export' ? exportSelected().length : importRows().filter(r => r.checked).length;
+            const label = Transfer.tab === 'export' ? 'Exportálás' : 'Importálás';
+            button.textContent = count > 1 ? `${label} (${count} projekt)` : label;
+            button.disabled = count === 0;
+        }
+
+        async function startTransfer() {
+            document.getElementById('transferOkBtn').disabled = true;
+            try {
+                await (Transfer.tab === 'export' ? startExport() : startImport());
+            } catch (e) {
+                showToast(e.message, 'error');
+            } finally {
+                updateTransferButton();
+            }
+        }
+
+        // --- Exportálás: a kijelölt projektek egy ZIP fájlba ---
+        function renderExportList() {
+            const list = document.getElementById('exportList');
+            const previous = new Set(exportSelected());
+            if (!sites.length) {
+                list.innerHTML = '<div class="px-3 py-4 text-sm text-gray-500 text-center">Még nincs projekt, amit exportálni lehetne.</div>';
+            } else {
+                list.innerHTML = sites.map(site => `
+                    <label class="flex items-center gap-3 px-3 py-2 ${site.installing ? 'opacity-50' : 'hover:bg-gray-900 cursor-pointer'}">
+                        <input type="checkbox" class="export-site accent-[var(--brand-500)]" value="${escapeHtml(site.name)}" ${site.installing ? 'disabled' : ''}
+                            ${!site.installing && (previous.has(site.name) || sites.length === 1) ? 'checked' : ''}>
+                        <span class="text-sm text-gray-200 truncate">${escapeHtml(site.name)}</span>
+                        <span class="ml-auto text-xs text-gray-500 shrink-0">${site.installing ? 'települ…' : escapeHtml(site.type)}</span>
+                    </label>`).join('');
+                list.querySelectorAll('.export-site').forEach(box => box.addEventListener('change', onExportSelection));
+            }
+            onExportSelection();
+        }
+
+        function exportSelected() {
+            return [...document.querySelectorAll('.export-site:checked')].map(box => box.value);
+        }
+
+        function exportSelectAll(on) {
+            document.querySelectorAll('.export-site:not(:disabled)').forEach(box => { box.checked = on; });
+            onExportSelection();
+        }
+
+        function onExportSelection() {
+            const boxes = [...document.querySelectorAll('.export-site:not(:disabled)')];
+            const all = document.getElementById('exportAll');
+            all.checked = boxes.length > 0 && boxes.every(box => box.checked);
+            all.indeterminate = !all.checked && boxes.some(box => box.checked);
+            updateExportName();
+            updateTransferButton();
+        }
+
+        // Alapból: <projekt>_2026-11-02_1530.zip (több projektnél pocketweb-projektek_...), amíg át nem írják
+        function updateExportName() {
+            if (Transfer.nameEdited) return;
+            const selected = exportSelected();
+            const d = new Date(), pad = n => String(n).padStart(2, '0');
+            const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+            document.getElementById('exportFileName').value = (selected.length === 1 ? selected[0] : 'pocketweb-projektek') + '_' + stamp + '.zip';
+        }
+
+        async function browseExportDir() {
+            const input = document.getElementById('exportDir');
+            const path = await pickPath({ mode: 'dir', start: input.value.trim(), title: 'Hova kerüljön a ZIP fájl?', okLabel: 'Ide mentem' });
+            if (path) input.value = path;
+        }
+
+        async function startExport() {
+            const names = exportSelected();
+            const dir = document.getElementById('exportDir').value.trim();
+            const fileName = document.getElementById('exportFileName').value.trim();
+            if (!names.length) return showToast('Jelölj ki legalább egy projektet!', 'error');
+            if (!dir) {
+                showToast('Válaszd ki a célmappát!', 'error');
+                return browseExportDir();
+            }
+            if (!fileName) return showToast('Add meg a ZIP fájl nevét!', 'error');
+            const params = { sites: names, dir, fileName, skipDeps: document.getElementById('exportSkipDeps').checked, cols: termColumns() };
+            let res = await api('export_start', params);
+            if (res.exists) {
+                const ok = await confirmDialog('A fájl már létezik', `A célmappában már van ilyen nevű fájl: ${res.dest}. Felülírod? (A régi fájl csak a sikeres mentés után cserélődik le.)`, 'Felülírás');
+                if (!ok) return;
+                res = await api('export_start', { ...params, overwrite: true });
+            }
+            localStorage.setItem('pw_export_dir', dir);
+            localStorage.setItem('pw_export_skipdeps', params.skipDeps ? '1' : '0');
+            Transfer.jobs.set(res.job, { dest: res.dest });
+            closeTransferModal();
+            showToast('Az exportálás elindult – a Terminál panelen követheted.', 'info');
+            termFocus(res.job);
+            pollSoon();
+        }
+
+        // --- Importálás: a ZIP-ben lévő projektek a projektek mappába ---
+        async function browseImportFile() {
+            const typed = document.getElementById('importFile').value.trim();
+            const start = typed ? typed.replace(/[\\/][^\\/]*$/, '') : (localStorage.getItem('pw_import_dir') || localStorage.getItem('pw_export_dir') || '');
+            const path = await pickPath({ mode: 'zip', start, title: 'Melyik ZIP fájlt importálod?', okLabel: 'Megnyitás' });
+            if (!path) return;
+            document.getElementById('importFile').value = path;
+            inspectImport();
+        }
+
+        async function inspectImport() {
+            const file = document.getElementById('importFile').value.trim();
+            if (!file || file === Transfer.inspectFor) return;   // az Enter és a change esemény is ide hív
+            Transfer.inspectFor = file;
+            Transfer.inspected = null;
+            const info = document.getElementById('importInfo');
+            info.textContent = 'A ZIP fájl tartalmának beolvasása...';
+            info.classList.remove('hidden', 'text-red-400');
+            document.getElementById('importListWrap').classList.add('hidden');
+            updateTransferButton();
+            try {
+                const res = await api('import_inspect', { file });
+                if (Transfer.inspectFor !== file) return;
+                Transfer.inspected = res;
+                renderImportList();
+            } catch (e) {
+                if (Transfer.inspectFor !== file) return;
+                Transfer.inspectFor = null;
+                info.textContent = e.message;
+                info.classList.add('text-red-400');
+            }
+        }
+
+        function renderImportList() {
+            const res = Transfer.inspected;
+            const parts = [res.manifest ? 'PocketWeb export' + (res.manifest.created ? ', készült: ' + new Date(res.manifest.created).toLocaleString('hu-HU') : '') : 'ZIP fájl', formatBytes(res.size)];
+            if (res.unsafe) parts.push(`${res.unsafe} fájl kimarad (érvénytelen név, vagy a projekt mappáján kívülre mutatna)`);
+            if (!res.projects.length) parts.push('nincs benne importálható projekt');
+            document.getElementById('importInfo').textContent = parts.join(' · ');
+            document.getElementById('importListWrap').classList.toggle('hidden', !res.projects.length);
+            const list = document.getElementById('importList');
+            list.innerHTML = res.projects.map((p, i) => `
+                <div class="import-row px-3 py-3" data-index="${i}">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                        <label class="flex items-start gap-3 min-w-0 flex-1 cursor-pointer">
+                            <input type="checkbox" class="import-check mt-1 accent-[var(--brand-500)]" checked>
+                            <span class="min-w-0">
+                                <span class="block text-sm text-gray-200 truncate">${escapeHtml(p.original)}</span>
+                                <span class="block text-xs text-gray-500">${escapeHtml(p.typeLabel)} · ${p.files} fájl · ${formatBytes(p.bytes)}${p.skipped.length ? ' · függőségek nélkül: importálás után települnek (internet kell)' : ''}</span>
+                            </span>
+                        </label>
+                        <div class="flex items-center gap-2 shrink-0 sm:w-64 pl-7 sm:pl-0">
+                            ${p.exists && p.canOverwrite ? '<select class="import-mode bg-gray-900 border border-gray-700 rounded-sm px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-brand-500"><option value="new">Új néven</option><option value="overwrite">Felülírás</option></select>' : ''}
+                            <input type="text" class="import-name flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded-sm px-2 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-brand-500 disabled:opacity-60"
+                                value="${escapeHtml(p.suggested)}" spellcheck="false" title="A projekt neve a PocketWebben">
+                        </div>
+                    </div>
+                    <div class="import-note hidden text-xs mt-1.5 pl-7"></div>
+                </div>`).join('');
+            list.querySelectorAll('.import-row').forEach(row => {
+                const p = res.projects[+row.dataset.index];
+                const mode = row.querySelector('.import-mode');
+                row.querySelector('.import-check').addEventListener('change', () => { updateImportRow(row); updateTransferButton(); });
+                row.querySelector('.import-name').addEventListener('input', () => updateImportRow(row));
+                if (mode) mode.addEventListener('change', () => {
+                    row.querySelector('.import-name').value = mode.value === 'overwrite' ? p.name : p.suggested;
+                    updateImportRow(row);
+                });
+                updateImportRow(row);
+            });
+            updateTransferButton();
+        }
+
+        function importRows() {
+            if (!Transfer.inspected) return [];
+            return [...document.querySelectorAll('#importList .import-row')].map(row => {
+                const mode = row.querySelector('.import-mode');
+                return {
+                    row, p: Transfer.inspected.projects[+row.dataset.index],
+                    checked: row.querySelector('.import-check').checked,
+                    overwrite: !!mode && mode.value === 'overwrite',
+                    name: row.querySelector('.import-name').value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
+                };
+            });
+        }
+
+        // A sor megjegyzése: felülírás figyelmeztetés, foglalt név
+        function updateImportRow(row) {
+            const r = importRows().find(item => item.row === row);
+            const note = row.querySelector('.import-note');
+            row.querySelector('.import-name').disabled = r.overwrite || !r.checked;
+            const mode = row.querySelector('.import-mode');
+            if (mode) mode.disabled = !r.checked;
+            let text = '', color = 'text-gray-500';
+            if (r.overwrite) {
+                text = `A meglévő „${r.p.name}” projekt tartalma törlődik, és a ZIP fájlban lévő változat kerül a helyére.`;
+                color = 'text-orange-400';
+            } else if (sites.some(site => site.name === r.name)) {
+                text = `Már van „${r.name}” nevű projekt: adj meg másik nevet${r.p.canOverwrite && r.name === r.p.name ? ', vagy válaszd a felülírást' : ''}!`;
+                color = 'text-red-400';
+            } else if (r.p.exists && r.name !== r.p.name) {
+                text = `Már van „${r.p.name}” nevű projekt, ezért ezen a néven jön létre: ${r.name}`;
+            }
+            note.textContent = text;
+            note.className = `import-note text-xs mt-1.5 pl-7 ${color} ${text && r.checked ? '' : 'hidden'}`;
+            row.classList.toggle('opacity-50', !r.checked);
+        }
+
+        async function startImport() {
+            const res = Transfer.inspected;
+            const rows = importRows().filter(r => r.checked);
+            if (!res || !rows.length) return showToast('Jelölj ki legalább egy projektet!', 'error');
+            const overwrite = rows.filter(r => r.overwrite).map(r => r.p.name);
+            if (overwrite.length) {
+                const ok = await confirmDialog('Felülírás', `A(z) ${overwrite.join(', ')} projekt jelenlegi tartalma törlődik, és a ZIP fájlban lévő változat kerül a helyére. Folytatod?`, 'Felülírás');
+                if (!ok) return;
+            }
+            const started = await api('import_start', { file: res.file, items: rows.map(r => ({ prefix: r.p.prefix, target: r.name, overwrite: r.overwrite })), cols: termColumns() });
+            localStorage.setItem('pw_import_dir', res.file.replace(/[\\/][^\\/]*$/, ''));
+            Transfer.jobs.set(started.job, {});
+            closeTransferModal();
+            showToast('Az importálás elindult – a Terminál panelen követheted.', 'info');
+            termFocus(started.job);
+            pollSoon();
+        }
+
+        // Az export / import vége: értesítés (az exportált ZIP megmutatható az Intézőben), import után a kártyák
+        function onTransferJobEnd(job) {
+            const ok = job.state === 'exited' && job.exitCode === 0;
+            const isExport = job.kind === 'export';
+            const text = (job.message || '').replace(/^\[[+x!*]\]\s*/, '');
+            if (job.state === 'stopped') {
+                showToast(isExport ? 'Az exportálás megszakadt.' : 'Az importálás megszakadt.', 'error');
+            } else if (ok && isExport) {
+                const dest = (Transfer.jobs.get(job.id) || {}).dest || (text.match(/elkészült: (.+)$/) || [])[1];
+                showToast(text || 'Az exportálás elkészült.', 'success', dest ? { label: 'Megmutatás', onClick: () => runAction('reveal_path', { path: dest }) } : null);
+            } else if (ok) {
+                showToast(text || 'Az importálás elkészült.', 'success');
+            } else {
+                showToast(`${text || (isExport ? 'Az exportálás nem sikerült' : 'Az importálás nem sikerült')} – részletek a Terminál panelen.`, 'error');
+            }
+            if (!isExport) fetchSites();
+            Transfer.jobs.delete(job.id);
+        }
+
+        // --- Tallózás: mappa vagy ZIP fájl (a böngésző nem adja meg a kiválasztott fájl valódi útvonalát) ---
+        const Fs = { mode: 'dir', path: null, parent: null, selected: null, resolve: null, places: { drives: [], places: [] }, entries: [], separator: '\\' };
+        const fsModal = document.getElementById('fsModal');
+        const fsModalContent = document.getElementById('fsModalContent');
+        const FS_ICONS = {
+            folder: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z',
+            zip: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4',
+            desktop: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+            documents: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+            downloads: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
+            cloud: 'M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z',
+            home: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
+            drive: 'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01',
+            network: 'M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9',
+        };
+        const FS_COLORS = { folder: 'text-yellow-500/80', zip: 'text-brand-500', network: 'text-blue-400', drive: 'text-gray-400' };
+
+        /** Mappa (mode: 'dir') vagy ZIP fájl (mode: 'zip') kiválasztása. Promise: a teljes útvonal, vagy null. */
+        function pickPath({ mode = 'dir', start = '', title = '', okLabel = 'Kiválasztás' } = {}) {
+            if (Fs.resolve) fsClose(null);
+            Fs.mode = mode;
+            document.getElementById('fsTitle').textContent = title;
+            document.getElementById('fsOkBtn').textContent = okLabel;
+            document.getElementById('fsNewFolderBtn').classList.toggle('hidden', mode !== 'dir');
+            document.getElementById('fsList').innerHTML = '<div class="px-4 py-6 text-gray-500">Betöltés...</div>';
+            fsModal.classList.remove('hidden');
+            setTimeout(() => fsModalContent.classList.remove('scale-95', 'opacity-0'), 10);
+            fsOpen(start);
+            return new Promise(resolve => { Fs.resolve = resolve; });
+        }
+
+        async function fsOpen(start) {
+            Fs.path = Fs.parent = Fs.selected = null;
+            try {
+                Fs.places = await api('fs_places');   // minden megnyitáskor: a hálózati meghajtók közben változhattak
+                Fs.separator = Fs.places.separator || '\\';
+            } catch (e) {
+                Fs.places = { drives: [], places: [] };
+            }
+            if (!start || !(await fsGo(start, true))) fsRoot();
+        }
+
+        function fsClose(result) {
+            fsModalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => fsModal.classList.add('hidden'), 200);
+            const resolve = Fs.resolve;
+            Fs.resolve = null;
+            if (resolve) resolve(result);
+        }
+
+        function fsConfirm() {
+            const result = Fs.mode === 'zip' ? Fs.selected : Fs.path;
+            if (result) fsClose(result);
+        }
+
+        function fsUp() {
+            if (Fs.parent) fsGo(Fs.parent);
+            else if (Fs.path) fsRoot();
+        }
+
+        function fsJoin(dir, name) {
+            return dir.replace(/[\\/]+$/, '') + Fs.separator + name;
+        }
+
+        async function fsGo(path, quiet = false) {
+            path = String(path || '').trim();
+            if (!path) {
+                fsRoot();
+                return true;
+            }
+            // a lassan válaszoló (pl. megszakadt kapcsolatú hálózati) meghajtónál jelezzük, hogy dolgozunk
+            const loading = setTimeout(() => { document.getElementById('fsList').innerHTML = '<div class="px-4 py-6 text-gray-500">Betöltés...</div>'; }, 400);
+            try {
+                const res = await api('fs_list', { path });
+                Fs.path = res.path;
+                Fs.parent = res.parent;
+                Fs.entries = res.entries;
+                Fs.selected = null;
+                fsRender(res.truncated);
+                return true;
+            } catch (e) {
+                if (!quiet) showToast(e.message, 'error');
+                fsRender(false);
+                return false;
+            } finally {
+                clearTimeout(loading);
+            }
+        }
+
+        // "Ez a gép": gyorselérés és meghajtók
+        function fsRoot() {
+            Fs.path = Fs.parent = Fs.selected = null;
+            Fs.entries = [];
+            fsRender(false);
+        }
+
+        function fsItem(icon, label, detail, attrs, extra = '') {
+            return `<button type="button" ${attrs} class="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-gray-800 transition-colors ${extra}">
+                <svg class="w-5 h-5 shrink-0 ${FS_COLORS[icon] || 'text-gray-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${FS_ICONS[icon] || FS_ICONS.folder}"></path></svg>
+                <span class="min-w-0 flex-1 truncate">${escapeHtml(label)}</span>
+                ${detail ? `<span class="shrink-0 max-w-[45%] truncate text-xs text-gray-500">${escapeHtml(detail)}</span>` : ''}
+            </button>`;
+        }
+
+        function fsPlaceItems(compact) {
+            const section = (title) => `<div class="px-4 pt-3 pb-1 text-[11px] font-semibold tracking-wider text-gray-500 uppercase">${title}</div>`;
+            const item = (entry) => fsItem(entry.icon, entry.label, compact ? '' : (entry.detail || (entry.available === false ? '' : entry.path)),
+                `data-path="${escapeHtml(entry.path)}" title="${escapeHtml(entry.detail || entry.path)}${entry.available === false ? ' – nincs kapcsolat' : ''}"`,
+                (entry.available === false ? 'opacity-50 ' : '') + (compact && Fs.path === entry.path ? 'bg-gray-800 text-white' : 'text-gray-300'));
+            let html = '';
+            if (Fs.places.places.length) html += section('Gyorselérés') + Fs.places.places.map(item).join('');
+            if (Fs.places.drives.length) html += section('Meghajtók') + Fs.places.drives.map(item).join('');
+            return html || '<div class="px-4 py-6 text-gray-500">Írj be egy útvonalat a fenti mezőbe!</div>';
+        }
+
+        function fsRender(truncated) {
+            document.getElementById('fsPath').value = Fs.path || '';
+            document.getElementById('fsUpBtn').disabled = !Fs.path;
+            document.getElementById('fsNewFolderBtn').disabled = !Fs.path;
+            document.getElementById('fsPlaces').innerHTML = fsPlaceItems(true);
+            const list = document.getElementById('fsList');
+            if (!Fs.path) {
+                list.innerHTML = fsPlaceItems(false);
+            } else {
+                const time = (mtime) => new Date(mtime * 1000).toLocaleString('hu-HU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+                const items = Fs.entries.map(entry => {
+                    const path = fsJoin(Fs.path, entry.name);
+                    if (entry.type === 'dir') return fsItem('folder', entry.name, '', `data-path="${escapeHtml(path)}"`, 'text-gray-200');
+                    const detail = formatBytes(entry.size) + ' · ' + time(entry.mtime);
+                    if (Fs.mode !== 'zip') {
+                        // mappaválasztáskor a ZIP fájlok csak tájékoztatásul látszanak (pl. a korábbi mentések)
+                        return fsItem('zip', entry.name, detail, 'disabled', 'text-gray-500 opacity-60 cursor-default hover:bg-transparent');
+                    }
+                    return fsItem('zip', entry.name, detail, `data-zip="${escapeHtml(path)}"`, Fs.selected === path ? 'bg-brand-600/20 text-white' : 'text-gray-200');
+                });
+                list.innerHTML = items.length ? items.join('') : `<div class="px-4 py-6 text-gray-500">${Fs.mode === 'zip' ? 'Ebben a mappában nincs ZIP fájl vagy almappa.' : 'Üres mappa.'}</div>`;
+                if (truncated) list.insertAdjacentHTML('beforeend', '<div class="px-4 py-2 text-xs text-gray-500">A mappában túl sok elem van, nem mind látszik.</div>');
+            }
+            const selected = document.getElementById('fsSelected');
+            const ok = document.getElementById('fsOkBtn');
+            if (Fs.mode === 'zip') {
+                selected.textContent = Fs.selected ? 'Kiválasztva: ' + Fs.selected : 'Válassz egy ZIP fájlt!';
+                ok.disabled = !Fs.selected;
+            } else {
+                selected.textContent = Fs.path ? 'Ide kerül: ' + Fs.path : 'Nyisd meg a mappát, ahová menteni szeretnél!';
+                ok.disabled = !Fs.path;
+            }
+            selected.title = selected.textContent;
+        }
+
+        // kattintás: mappa → megnyitás, ZIP → kijelölés (dupla kattintás: megnyitás)
+        for (const id of ['fsPlaces', 'fsList']) {
+            document.getElementById(id).addEventListener('click', (e) => {
+                const item = e.target.closest('[data-path], [data-zip]');
+                if (!item) return;
+                if (item.dataset.path) return fsGo(item.dataset.path);
+                Fs.selected = item.dataset.zip;
+                fsRender(false);
+            });
+        }
+        document.getElementById('fsList').addEventListener('dblclick', (e) => {
+            const item = e.target.closest('[data-zip]');
+            if (item) fsClose(item.dataset.zip);
+        });
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && Fs.resolve) fsClose(null);
+        });
+
+        function fsNewFolder() {
+            if (!Fs.path) return;
+            const list = document.getElementById('fsList');
+            const existing = document.getElementById('fsNewName');
+            if (existing) return existing.focus();
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-2 px-4 py-2 border-b border-gray-800 bg-gray-950';
+            row.innerHTML = `<input id="fsNewName" type="text" spellcheck="false" placeholder="Az új mappa neve, pl. PocketWeb mentések" class="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded-sm px-2 py-1.5 text-sm text-white focus:outline-none focus:border-brand-500">
+                <button type="button" class="shrink-0 px-3 py-1.5 bg-brand-600 hover:bg-brand-500 rounded-sm text-sm text-white">Létrehozás</button>`;
+            list.prepend(row);
+            const input = row.querySelector('input');
+            const create = async () => {
+                const name = input.value.trim();
+                if (!name) return input.focus();
+                try {
+                    const res = await api('fs_mkdir', { path: Fs.path, name });
+                    await fsGo(res.path);
+                } catch (e) {
+                    showToast(e.message, 'error');
+                }
+            };
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') create();
+                if (e.key === 'Escape') { e.stopPropagation(); row.remove(); }
+            });
+            row.querySelector('button').addEventListener('click', create);
+            input.focus();
+        }
+
         // --- Beállítások Modal ---
         const settingsModal = document.getElementById('settingsModal');
         const settingsModalContent = document.getElementById('settingsModalContent');
@@ -1261,7 +1841,7 @@
         }
 
         // --- Toast (Értesítések) ---
-        function showToast(message, type = 'info') {
+        function showToast(message, type = 'info', action = null) {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
 
@@ -1281,13 +1861,20 @@
             toast.className = `flex items-center p-4 border rounded-sm shadow-lg transform transition-all duration-300 translate-y-10 opacity-0 max-w-md ${bgColor} pointer-events-auto`;
             toast.innerHTML = `${icon} <span class="text-sm font-medium"></span>`;
             toast.querySelector('span').textContent = message;
+            if (action) {
+                const button = document.createElement('button');
+                button.className = 'ml-4 shrink-0 px-2 py-1 rounded-sm border border-current text-xs font-medium hover:bg-white/10';
+                button.textContent = action.label;
+                button.addEventListener('click', () => { action.onClick(); toast.remove(); });
+                toast.appendChild(button);
+            }
 
             container.appendChild(toast);
             setTimeout(() => toast.classList.remove('translate-y-10', 'opacity-0'), 10);
             setTimeout(() => {
                 toast.classList.add('opacity-0', 'translate-x-10');
                 setTimeout(() => toast.remove(), 300);
-            }, type === 'error' ? 6000 : 3000);
+            }, action ? 10000 : (type === 'error' ? 6000 : 3000));
         }
 
         function setNotice(text) {
@@ -1338,7 +1925,10 @@
         // A saját ablakát (app mód) a PocketWeb zárja be, miután mindent leállított: a lap maga ezt nem mindig
         // teheti meg, mert a böngésző csak akkor engedi, ha az ablakban még nem navigáltak.
         async function quitApp() {
-            const ok = await confirmDialog('Kilépés', 'Leállítod a PocketWebet? Minden futó szerver és telepítés leáll.', 'Kilépés');
+            const transfer = [...Term.jobs.values()].some(t => ['export', 'import'].includes(t.job.kind) && isActiveJob(t.job));
+            const ok = await confirmDialog('Kilépés', transfer
+                ? 'Folyamatban van egy exportálás vagy importálás: ha most kilépsz, megszakad. Biztosan leállítod a PocketWebet?'
+                : 'Leállítod a PocketWebet? Minden futó szerver és telepítés leáll.', 'Kilépés');
             if (!ok) return;
             quitting = true;
             showOverlay('A PocketWeb leáll...', 'Minden szerver és telepítés leáll, utána ez az ablak bezárul.', false);
@@ -1587,6 +2177,7 @@
 
         // Állapotváltozások: értesítések és a kártyák frissítése
         function onJobChange(prev, job) {
+            if ((job.kind === 'export' || job.kind === 'import') && !isActiveJob(job) && isActiveJob(prev)) onTransferJobEnd(job);
             const where = job.site ? `${job.site}: ` : '';
             const reason = (job.message || '').replace(/^\[[x!]\]\s*/, '');
             if (job.kind === 'install' && !isActiveJob(job) && isActiveJob(prev)) {
@@ -1730,10 +2321,10 @@
             }
         });
 
-        // Figyelmeztetés, ha telepítés közben zárnák be az ablakot
+        // Figyelmeztetés, ha telepítés, export vagy import közben zárnák be az ablakot
         window.addEventListener('beforeunload', (e) => {
             if (quitting) return;
-            if ([...Term.jobs.values()].some(t => t.job.kind === 'install' && isActiveJob(t.job))) {
+            if ([...Term.jobs.values()].some(t => ['install', 'export', 'import'].includes(t.job.kind) && isActiveJob(t.job))) {
                 e.preventDefault();
                 e.returnValue = '';
             }

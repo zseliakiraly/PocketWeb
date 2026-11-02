@@ -88,6 +88,23 @@ function site_jobs(string $site, ?string $kind = null): array
     }));
 }
 
+/** A projekt futó folyamatainak (szerver, telepítő, képernyőkép) leállítása – Windowson a futó program zárolja a fájljait. */
+function stop_site_processes(string $name, string $dir): void
+{
+    $active = array_merge(site_jobs($name, 'server'), site_jobs($name, 'install'), site_jobs($name, 'thumbnail'));
+    if ($active) {
+        require_supervisor();
+        foreach ($active as $job) Jobs::send(['op' => 'stop', 'id' => $job['id']]);
+        $deadline = microtime(true) + 10;
+        while (site_jobs($name) && microtime(true) < $deadline) usleep(200000);
+    }
+    $portFile = pw_path($dir, '.ms-port');
+    if (is_file($portFile)) {
+        $port = (int)file_get_contents($portFile);
+        if (Platform::isListening($port, Platform::listeningPorts())) Platform::killTree(Platform::pidsOnPort($port));
+    }
+}
+
 // ----------------------------------------------------------------------
 // Műveletek, amelyek nem a vezérlőpult JavaScriptjéből jönnek
 // ----------------------------------------------------------------------
@@ -267,9 +284,9 @@ if ($action === 'jobs') {
             $item['output'] = base64_encode($chunk['data']);
             $item['offset'] = $chunk['offset'];
         }
-        // a rejtett feladatok, és a hibával leállt szerverek / telepítők utolsó sora (az értesítéshez)
+        // a rejtett feladatok, a hibával leállt szerverek / telepítők és az exportok / importok utolsó sora (az értesítéshez)
         $failed = in_array($job['kind'], ['server', 'install'], true) && ($status['exitCode'] ?? 0) !== 0;
-        if (!Jobs::isActive($job) && ($item['hidden'] || $failed)) {
+        if (!Jobs::isActive($job) && ($item['hidden'] || $failed || in_array($job['kind'], ['export', 'import'], true))) {
             $item['message'] = Jobs::lastLine($id);
         }
         $list[] = $item;
@@ -534,21 +551,7 @@ if ($action === 'create_project') {
 
 if ($action === 'delete_site') {
     [$name, $dir] = require_site();
-
-    // Előbb leállítjuk a projekt futó folyamatait – Windowson a futó program zárolja a fájljait
-    $active = array_merge(site_jobs($name, 'server'), site_jobs($name, 'install'), site_jobs($name, 'thumbnail'));
-    if ($active) {
-        require_supervisor();
-        foreach ($active as $job) Jobs::send(['op' => 'stop', 'id' => $job['id']]);
-        $deadline = microtime(true) + 10;
-        while (site_jobs($name) && microtime(true) < $deadline) usleep(200000);
-    }
-    $portFile = pw_path($dir, '.ms-port');
-    if (is_file($portFile)) {
-        $port = (int)file_get_contents($portFile);
-        if (Platform::isListening($port, Platform::listeningPorts())) Platform::killTree(Platform::pidsOnPort($port));
-    }
-
+    stop_site_processes($name, $dir);
     Sites::deleteDir($dir);
     if (is_dir($dir)) {
         fail('Nem sikerült minden fájlt törölni. Lehet, hogy egy program (pl. szerkesztő vagy parancssor) még használja a mappát.');
@@ -566,6 +569,178 @@ if ($action === 'capture_thumbnail') {
         'cwd' => $dir,
     ]);
     respond(['success' => true, 'job' => $id]);
+}
+
+// ----------------------------------------------------------------------
+// Import / Export: a projektek ZIP fájlba mentése (pl. a hálózati meghajtóra) és visszatöltése.
+// A böngésző nem adja meg a kiválasztott mappa valódi útvonalát, ezért a vezérlőpult saját tallózó ablaka
+// ezekkel a műveletekkel járja be a meghajtókat. A ZIP-et a háttérben a tasks\export.php és import.php kezeli.
+// ----------------------------------------------------------------------
+
+// sok ezer fájlos projekteknél (vendor, node_modules) a ZIP tartalomjegyzéke sok memóriát és időt kérhet
+if (in_array($action, ['export_start', 'import_inspect', 'import_start'], true)) {
+    ini_set('memory_limit', '512M');
+    set_time_limit(120);
+}
+
+/** Egyszerre egy export / import futhat (mindkettő a gép ideiglenes mappáját és a projektek mappát használja). */
+function transfer_busy(): void
+{
+    foreach (Jobs::all() as $job) {
+        if (in_array($job['kind'], ['export', 'import'], true) && Jobs::isActive($job)) {
+            fail('Már fut egy ' . ($job['kind'] === 'export' ? 'exportálás' : 'importálás') . ': várd meg a végét (a Terminál panelen követheted)!');
+        }
+    }
+}
+
+/** Teljes útvonal a kérésből (C:\..., H:\..., \\szerver\megosztás\...). */
+function input_path(string $key): string
+{
+    $path = Transfer::normalizePath((string)input($key, ''));
+    if ($path === null) fail('Érvénytelen útvonal: teljes útvonalat adj meg (pl. H:\\Mentések).');
+    return $path;
+}
+
+/** A feladat leírása fájlban megy át: az ékezetes útvonalak a parancssorban elromolhatnának. */
+function transfer_spec(array $data): string
+{
+    @mkdir(PW_RUN, 0777, true);
+    $file = pw_path(PW_RUN, 'transfer-' . bin2hex(random_bytes(8)) . '.json');
+    if (!Jobs::writeJson($file, $data)) fail('Nem sikerült elmenteni a feladat adatait.', 500);
+    return $file;
+}
+
+/** A kérésben megadott ZIP fájl megnyitva: [útvonal, ZipArchive]. */
+function open_import_zip(): array
+{
+    if (!class_exists('ZipArchive')) fail('A ZIP fájlhoz a PHP zip kiterjesztése kell (rendszer\\php\\php.ini: extension=zip).');
+    $file = input_path('file');
+    if (!@is_file($file)) fail('A fájl nem található: ' . $file, 404);
+    $zip = new ZipArchive();
+    if ($zip->open($file, ZipArchive::RDONLY) !== true) fail('A fájl nem ZIP fájl, vagy sérült: ' . basename($file));
+    return [$file, $zip];
+}
+
+// Tallózás: meghajtók (a hálózatiak is) és a gyorselérés mappái (Asztal, Dokumentumok, Letöltések, OneDrive)
+if ($action === 'fs_places') {
+    respond(['drives' => Transfer::drives(), 'places' => Transfer::places(), 'separator' => DIRECTORY_SEPARATOR]);
+}
+
+if ($action === 'fs_list') {
+    $path = input_path('path');
+    if (!@is_dir($path)) fail('A mappa nem található, vagy nem érhető el: ' . $path, 404);
+    $list = Transfer::listDir($path);
+    if ($list === null) fail('A mappa tartalma nem olvasható (nincs hozzá jogod?): ' . $path, 403);
+    respond(['path' => $path, 'parent' => Transfer::parent($path), 'entries' => $list['entries'], 'truncated' => $list['truncated']]);
+}
+
+if ($action === 'fs_mkdir') {
+    $path = input_path('path');
+    $name = trim((string)input('name', ''));
+    if (!Transfer::validFileName($name)) fail('Érvénytelen mappanév (nem lehet benne: \\ / : * ? " < > |).');
+    $new = Transfer::join($path, $name);
+    if (file_exists($new)) fail('Már van ilyen nevű mappa vagy fájl: ' . $name);
+    if (!@mkdir($new)) fail('Nem sikerült létrehozni a mappát (van írási jogod ide?): ' . $new);
+    respond(['success' => true, 'path' => $new]);
+}
+
+// Exportálás: a kijelölt projektek egy ZIP fájlba (a gépen készül, a végén kerül át a célmappába)
+if ($action === 'export_start') {
+    require_supervisor();
+    transfer_busy();
+    $names = array_values(array_unique(array_map('strval', (array)input('sites', []))));
+    if (!$names) fail('Jelölj ki legalább egy projektet!');
+    foreach ($names as $name) {
+        if (Sites::dir($name) === null) fail('A projekt nem található: ' . $name, 404);
+        if (site_jobs($name, 'install')) fail($name . ': a projekt még települ, várd meg a végét!');
+    }
+    $dir = input_path('dir');
+    if (!@is_dir($dir)) fail('A célmappa nem található, vagy nem érhető el: ' . $dir, 404);
+    $fileName = trim((string)input('fileName', ''));
+    if (strcasecmp((string)pathinfo($fileName, PATHINFO_EXTENSION), 'zip') !== 0) $fileName .= '.zip';
+    if (!Transfer::validFileName($fileName)) fail('Érvénytelen fájlnév (nem lehet benne: \\ / : * ? " < > |).');
+    $dest = Transfer::join($dir, $fileName);
+    if (is_dir($dest)) fail('A célmappában ezen a néven egy mappa van: ' . $fileName);
+    if (file_exists($dest) && !input('overwrite')) respond(['success' => true, 'exists' => true, 'dest' => $dest]);
+    $spec = transfer_spec(['sites' => $names, 'dest' => $dest, 'skipDeps' => (bool)input('skipDeps', false)]);
+    $id = Jobs::create([
+        'kind' => 'export', 'title' => 'Exportálás · ' . (count($names) === 1 ? $names[0] : count($names) . ' projekt'),
+        'display' => 'ZIP → ' . $dest,
+        'cmd' => [Platform::php(), pw_path(PW_SYS, 'tasks', 'export.php'), $spec],
+        'cwd' => PW_RUN, 'env' => terminal_env(),
+    ]);
+    respond(['success' => true, 'job' => $id, 'dest' => $dest]);
+}
+
+// Importálás 1.: a ZIP-ben lévő projektek (csak a ZIP tartalomjegyzékét olvassa, a kibontás a gépre másolás után jön)
+if ($action === 'import_inspect') {
+    [$file, $zip] = open_import_zip();
+    $found = Transfer::inspect($zip, basename($file));
+    $zip->close();
+    $taken = [];
+    $projects = [];
+    foreach ($found['projects'] as $project) {
+        $suggested = Transfer::uniqueName($project['name'], $taken);
+        $taken[] = $suggested;
+        $existing = Sites::dir($project['name']);
+        $projects[] = [
+            'prefix' => $project['prefix'], 'original' => $project['original'], 'name' => $project['name'],
+            'type' => $project['type'], 'typeLabel' => Sites::TYPES[$project['type']] ?? 'Ismeretlen típus',
+            'files' => $project['files'], 'bytes' => $project['bytes'], 'skipped' => $project['skipped'],
+            'exists' => file_exists(pw_path(PW_PROJECTS, $project['name'])),
+            'canOverwrite' => $existing !== null && !site_jobs($project['name'], 'install'),
+            'suggested' => $suggested,
+        ];
+    }
+    $manifest = $found['manifest'];
+    respond([
+        'success' => true, 'file' => $file, 'size' => (int)@filesize($file), 'unsafe' => $found['unsafe'], 'projects' => $projects,
+        'manifest' => $manifest ? ['created' => (string)($manifest['created'] ?? ''), 'version' => (string)($manifest['version'] ?? '')] : null,
+    ]);
+}
+
+// Importálás 2.: a kiválasztott projektek (új néven, vagy a meglévő felülírásával)
+if ($action === 'import_start') {
+    require_supervisor();
+    transfer_busy();
+    [$file, $zip] = open_import_zip();
+    $found = Transfer::inspect($zip, basename($file));
+    $zip->close();
+    $byPrefix = array_column($found['projects'], null, 'prefix');
+    $items = [];
+    $targets = [];
+    foreach ((array)input('items', []) as $item) {
+        if (!is_array($item) || !isset($byPrefix[(string)($item['prefix'] ?? '')])) fail('A kiválasztott projekt nem található a ZIP-ben.');
+        $project = $byPrefix[(string)$item['prefix']];
+        $overwrite = !empty($item['overwrite']);
+        $target = $overwrite ? $project['name'] : trim((string)($item['target'] ?? ''));
+        if (!Sites::validNewName($target)) fail('Érvénytelen projektnév: ' . $target . ' (csak kisbetű, szám, kötőjel és aláhúzás lehet benne).');
+        if (isset($targets[$target])) fail('Két projekt nem kaphatja ugyanazt a nevet: ' . $target);
+        if ($overwrite && Sites::dir($target) === null) $overwrite = false;   // közben törölték: egyszerűen létrejön
+        if ($overwrite && site_jobs($target, 'install')) fail($target . ': a projekt még települ, várd meg a végét!');
+        if (!$overwrite && file_exists(pw_path(PW_PROJECTS, $target))) fail('Már van ilyen nevű projekt: ' . $target . '. Adj meg másik nevet, vagy válaszd a felülírást!');
+        $targets[$target] = true;
+        $items[] = ['prefix' => $project['prefix'], 'target' => $target, 'overwrite' => $overwrite];
+    }
+    if (!$items) fail('Jelölj ki legalább egy projektet!');
+    foreach ($items as $item) {
+        if ($item['overwrite']) stop_site_processes($item['target'], pw_path(PW_PROJECTS, $item['target']));
+    }
+    $spec = transfer_spec(['source' => $file, 'items' => $items]);
+    $id = Jobs::create([
+        'kind' => 'import', 'title' => 'Importálás · ' . basename($file),
+        'display' => 'ZIP ← ' . $file,
+        'cmd' => [Platform::php(), pw_path(PW_SYS, 'tasks', 'import.php'), $spec],
+        'cwd' => PW_RUN, 'env' => terminal_env(),
+    ]);
+    respond(['success' => true, 'job' => $id]);
+}
+
+// Az exportált ZIP megmutatása az Intézőben (kijelölve)
+if ($action === 'reveal_path') {
+    $path = input_path('path');
+    if (!@is_file($path) || strcasecmp((string)pathinfo($path, PATHINFO_EXTENSION), 'zip') !== 0) fail('A fájl nem található: ' . $path, 404);
+    launch(Platform::revealFileSpec($path));
 }
 
 fail('Ismeretlen művelet.', 404);
