@@ -1,11 +1,15 @@
 # PocketWeb
-verzió 3.0 – Windows változat
+verzió 3.2 – Windows változat
 
 A PocketWeb egy hordozható, faék egyszerűségű webfejlesztő eszköz Windowsra. Telepítés nélkül, rendszergazdai jogok nélkül futtatható. Csak kibontod és már használhatod is!
 
 Mellékelt eszközök: php, node.js, Composer és Adminer
 
 > A GitHubon a `rendszer\php` és a `rendszer\node` mappa csak a leírást tartalmazza: a php.exe és a node.exe a kész (letölthető) csomagban van benne. Ha a forrásból állítod össze, lásd a mappákban lévő `DOWNLOAD.me` fájlokat.
+
+## Újdonságok a 3.2-ben
+
+- **Import / Export** a fejlécben: a projektek – akár több egyszerre – egy ZIP fájlba menthetők (pl. a hálózati meghajtóra vagy pendrive-ra), és onnan visszatölthetők, 7-Zip vagy WinZip nélkül. A ZIP a gépen készül el, és csak a kész fájl kerül a hálózati meghajtóra; importnál a meglévő projekt új néven is betölthető, vagy felülírható. Részletek: [Import / Export](#a-vezérlőpult-használata) (7. pont).
 
 ## Újdonságok a 3.0-ban
 
@@ -18,7 +22,6 @@ Mellékelt eszközök: php, node.js, Composer és Adminer
 - Kíméletes a géppel: a Vezérlőpult csak akkor kérdezi le a háttérfolyamatokat, ha fut valami (szerver, telepítés), és a projektek listáját csak induláskor, a Frissítés gombra és egy új projekt elkészülésekor tölti újra.
 - **Hol a hiba?** Ha egy Laravel projektben szintaxishiba van, vagy egy oldal hibát dob, a Terminál panel megmutatja a fájlt, a sort és a kódrészletet; a hiba helyére kattintva a szerkesztő a hibás sornál nyílik meg.
 - **Választható böngésző** a projektekhez (rendszer alapértelmezett, Chrome, Firefox, Edge); a Vezérlőpult továbbra is a saját Edge ablakában fut.
-- **Import / Export**: a projektek egy vagy több projektet tartalmazó ZIP fájlba menthetők (pl. a hálózati meghajtóra), és onnan visszatölthetők – 7-Zip vagy WinZip nélkül.
 
 ## Indítás és használat
 

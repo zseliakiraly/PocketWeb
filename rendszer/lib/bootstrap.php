@@ -4,7 +4,7 @@
  * Az api.php, a router.php, a felügyelő (pocketweb.php) és a tasks\ szkriptek is ezt töltik be.
  */
 
-define('PW_VERSION', '3.0');
+define('PW_VERSION', '3.2');
 define('PW_SYS', dirname(__DIR__));                              // ...\PocketWeb\rendszer
 define('PW_ROOT', dirname(PW_SYS));                              // ...\PocketWeb
 define('PW_PROJECTS', PW_ROOT . DIRECTORY_SEPARATOR . 'projektek');
